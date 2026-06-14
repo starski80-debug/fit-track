@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/style.css?v=13">
 </head>
 <body>
   <aside class="sidebar">
@@ -33,7 +33,10 @@
     <header>
       <div>
         <p class="eyebrow" id="today"></p>
-        <h1 id="page-title">Bentornato</h1>
+        <div class="page-title-row">
+          <h1 id="page-title">Bentornato</h1>
+          <span class="build-version">Mobile 2</span>
+        </div>
       </div>
       <div class="header-actions">
         <button class="install-app hidden" id="install-app" type="button">Installa</button>
@@ -218,6 +221,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=12"></script>
+  <script src="/app.js?v=13"></script>
 </body>
 </html>

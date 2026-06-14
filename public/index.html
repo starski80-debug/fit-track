@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#151629">
+  <title>FitTrack - Diario allenamenti</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#"><span class="brand-mark">F</span><span>FitTrack</span></a>
+    <nav>
+      <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panoramica</button>
+      <button class="nav-item" data-view="history"><span>◷</span> Storico</button>
+      <button class="nav-item" data-view="people"><span>♙</span> Persone</button>
+      <button class="nav-item" data-view="catalog"><span>E</span> Catalogo esercizi</button>
+    </nav>
+    <div class="sidebar-note">
+      <span>I tuoi dati sono protetti.</span>
+      <button class="logout-button hidden" id="logout" type="button">Esci</button>
+    </div>
+  </aside>
+
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow" id="today"></p>
+        <h1 id="page-title">Bentornato</h1>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema">
+          <span class="theme-icon">L</span>
+        </button>
+        <button class="primary" id="new-workout">+ Nuovo allenamento</button>
+      </div>
+    </header>
+
+    <section id="dashboard-view" class="view">
+      <div class="hero">
+        <div>
+          <span class="pill">IL TUO RITMO</span>
+          <h2>Ogni allenamento<br>conta.</h2>
+          <p>Registra i progressi di tutti, un esercizio alla volta.</p>
+        </div>
+        <div class="hero-graphic"><div class="pulse">↗</div></div>
+      </div>
+      <div class="stats" id="stats"></div>
+      <div class="section-head">
+        <div><p class="eyebrow">ATTIVITA RECENTI</p><h2>Ultimi allenamenti</h2></div>
+        <button class="text-button" data-go="history">Vedi tutti</button>
+      </div>
+      <div id="recent-workouts" class="workout-list"></div>
+    </section>
+
+    <section id="history-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">DIARIO</p><h2 id="history-title">Scegli una persona</h2></div>
+        <button class="secondary hidden" id="history-back">← Tutte le persone</button>
+      </div>
+      <p class="section-help" id="history-help">Clicca su un nome per vedere allenamenti, giornate e andamento.</p>
+      <div id="history-people" class="history-people"></div>
+      <div id="history-detail" class="hidden">
+        <div id="history-summary" class="history-summary"></div>
+        <section class="chart-card">
+          <div class="chart-head">
+            <div><p class="eyebrow">ANDAMENTO</p><h3>Volume sollevato nel tempo</h3></div>
+            <span>Serie × ripetizioni × kg</span>
+          </div>
+          <div id="progress-chart" class="progress-chart"></div>
+        </section>
+        <div class="section-head history-days-head">
+          <div><p class="eyebrow">GIORNO PER GIORNO</p><h2>Allenamenti</h2></div>
+        </div>
+        <div id="history-days" class="history-days"></div>
+      </div>
+    </section>
+
+    <section id="people-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">ATLETI</p><h2>Le persone</h2></div>
+        <button class="secondary" id="new-person">+ Aggiungi persona</button>
+      </div>
+      <p class="section-help">Clicca su una persona per visualizzare e modificare i suoi dati.</p>
+      <div id="people-grid" class="people-grid"></div>
+    </section>
+
+    <section id="catalog-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">PERSONALIZZAZIONE</p><h2>Catalogo esercizi</h2></div>
+        <button class="secondary" id="new-catalog-exercise">+ Nuovo esercizio</button>
+      </div>
+      <div class="catalog-toolbar">
+        <select id="catalog-filter">
+          <option value="">Tutte le zone</option>
+          <option>Petto</option><option>Schiena</option><option>Spalle</option>
+          <option>Braccia</option><option>Gambe</option><option>Addome</option>
+          <option>Cardio</option><option>Altro</option>
+        </select>
+        <p>Le modifiche saranno disponibili subito nei nuovi allenamenti.</p>
+      </div>
+      <div class="catalog-info">Qui puoi modificare il database degli esercizi: aggiungi nuove voci con il pulsante in alto oppure elimina quelle che non utilizzi.</div>
+      <div id="catalog-grid" class="catalog-grid"></div>
+    </section>
+  </main>
+
+  <nav class="mobile-nav">
+    <button class="nav-item active" data-view="dashboard">⌂<small>Home</small></button>
+    <button class="nav-item" data-view="history">◷<small>Storico</small></button>
+    <button class="mobile-add" id="mobile-new">+</button>
+    <button class="nav-item" data-view="people">♙<small>Persone</small></button>
+    <button class="nav-item" data-view="catalog">E<small>Esercizi</small></button>
+  </nav>
+
+  <dialog id="workout-dialog">
+    <form id="workout-form">
+      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">×</button></div>
+      <div class="form-grid">
+        <label>Persona<select name="personId" id="person-select" required></select></label>
+        <label>Data<input name="date" type="date" required></label>
+        <label>Durata (minuti)<input name="duration" type="number" min="0" value="45"></label>
+        <label>Note<input name="notes" placeholder="Come e andata?"></label>
+      </div>
+      <div class="exercise-title"><h3>Esercizi</h3><button type="button" class="text-button" id="add-exercise">+ Aggiungi</button></div>
+      <div id="exercise-list"></div>
+      <button class="primary full" type="submit">Salva allenamento</button>
+    </form>
+  </dialog>
+
+  <dialog id="person-dialog">
+    <form id="person-form">
+      <input name="id" type="hidden">
+      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">×</button></div>
+      <label>Nome<input name="name" placeholder="Es. Luca" required autofocus></label>
+      <div class="form-grid">
+        <label>Data di nascita<input name="birthDate" type="date"></label>
+        <label>Colore profilo<input name="color" type="color" value="#6c63ff"></label>
+        <label>Altezza (cm)<input name="height" type="number" min="0" step="0.1"></label>
+        <label>Peso (kg)<input name="weight" type="number" min="0" step="0.1"></label>
+      </div>
+      <label>Note<input name="notes" placeholder="Informazioni facoltative"></label>
+      <div class="person-form-actions">
+        <button class="danger hidden" id="delete-person" type="button">Elimina persona</button>
+        <button class="primary" type="submit">Salva persona</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="catalog-dialog">
+    <form id="catalog-form">
+      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">×</button></div>
+      <label>Zona del corpo
+        <select name="bodyArea" required>
+          <option>Petto</option><option>Schiena</option><option>Spalle</option>
+          <option>Braccia</option><option>Gambe</option><option>Addome</option>
+          <option>Cardio</option><option>Altro</option>
+        </select>
+      </label>
+      <label>Nome esercizio<input name="name" placeholder="Es. Panca declinata" required></label>
+      <button class="primary full" type="submit">Aggiungi al catalogo</button>
+    </form>
+  </dialog>
+
+  <dialog id="login-dialog" class="login-dialog">
+    <form id="login-form">
+      <div class="login-brand"><span class="brand-mark">F</span><span>FitTrack</span></div>
+      <p class="eyebrow">AREA PERSONALE</p>
+      <h2>Accedi ai tuoi allenamenti</h2>
+      <p class="login-copy">Inserisci la password configurata su Railway.</p>
+      <label>Password<input name="password" type="password" autocomplete="current-password" required autofocus></label>
+      <p class="login-error hidden" id="login-error"></p>
+      <button class="primary full" type="submit">Accedi</button>
+    </form>
+  </dialog>
+
+  <template id="exercise-template">
+    <div class="exercise-row">
+      <select class="body-area" aria-label="Zona del corpo">
+        <option>Petto</option><option>Schiena</option><option>Spalle</option>
+        <option>Braccia</option><option>Gambe</option><option>Addome</option><option>Cardio</option><option>Altro</option>
+      </select>
+      <div class="exercise-picker">
+        <select class="exercise-name" aria-label="Esercizio" required></select>
+        <input class="custom-exercise hidden" placeholder="Nome esercizio personalizzato" aria-label="Esercizio personalizzato">
+      </div>
+      <input class="sets" type="number" min="0" placeholder="Serie" aria-label="Serie">
+      <input class="reps" type="number" min="0" placeholder="Rip." aria-label="Ripetizioni">
+      <input class="weight" type="number" min="0" step="0.5" placeholder="Kg" aria-label="Peso">
+      <button type="button" class="remove-exercise" aria-label="Rimuovi">×</button>
+    </div>
+  </template>
+  <div id="toast" role="status"></div>
+  <script src="/app.js?v=7"></script>
+</body>
+</html>

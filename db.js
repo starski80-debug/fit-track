@@ -19,6 +19,9 @@ function createSqliteStore() {
   const db = new DatabaseSync(path.join(dataDir, "fittrack.db"));
   db.exec(`
     PRAGMA foreign_keys = ON;
+    PRAGMA journal_mode = WAL;
+    PRAGMA synchronous = NORMAL;
+    PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS people (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
       color TEXT NOT NULL DEFAULT '#6c63ff', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -39,6 +42,9 @@ function createSqliteStore() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, body_area TEXT NOT NULL, name TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(body_area, name)
     );
+    CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
+    CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
+    CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
   `);
   const columns = db.prepare("PRAGMA table_info(people)").all().map((item) => item.name);
   for (const [name, definition] of [
@@ -50,13 +56,12 @@ function createSqliteStore() {
 
   return {
     type:"sqlite",
+    async ping() { db.prepare("SELECT 1 AS ok").get(); return true; },
     async close() { db.close(); },
     async init() {
-      if (db.prepare("SELECT COUNT(*) AS count FROM exercise_catalog").get().count === 0) {
-        const insert = db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)");
-        for (const [area, names] of Object.entries(defaultCatalog)) {
-          for (const name of names) insert.run(area, name);
-        }
+      const insert = db.prepare("INSERT OR IGNORE INTO exercise_catalog (body_area, name) VALUES (?, ?)");
+      for (const [area, names] of Object.entries(defaultCatalog)) {
+        for (const name of names) insert.run(area, name);
       }
     },
     async dashboard() {
@@ -76,14 +81,14 @@ function createSqliteStore() {
       `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes).lastInsertRowid);
     },
     async updatePerson(id, body) {
-      db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=? WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, id);
+      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=? WHERE id=?`)
+        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, id).changes > 0;
     },
-    async deletePerson(id) { db.prepare("DELETE FROM people WHERE id=?").run(id); },
+    async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
     async addCatalog(area, name) {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
-    async deleteCatalog(id) { db.prepare("DELETE FROM exercise_catalog WHERE id=?").run(id); },
+    async deleteCatalog(id) { return db.prepare("DELETE FROM exercise_catalog WHERE id=?").run(id).changes > 0; },
     async addWorkout(body) {
       db.exec("BEGIN");
       try {
@@ -101,7 +106,7 @@ function createSqliteStore() {
         throw error;
       }
     },
-    async deleteWorkout(id) { db.prepare("DELETE FROM workouts WHERE id=?").run(id); }
+    async deleteWorkout(id) { return db.prepare("DELETE FROM workouts WHERE id=?").run(id).changes > 0; }
   };
 }
 
@@ -111,12 +116,23 @@ function createPostgresStore() {
     /[?&]sslmode=(require|verify-ca|verify-full)/.test(process.env.DATABASE_URL);
   const pool = new Pool({
     connectionString:process.env.DATABASE_URL,
-    ssl:sslEnabled ? { rejectUnauthorized:false } : false
+    ssl:sslEnabled ? { rejectUnauthorized:false } : false,
+    max:Number(process.env.PG_POOL_MAX || 8),
+    idleTimeoutMillis:30_000,
+    connectionTimeoutMillis:10_000,
+    statement_timeout:15_000,
+    query_timeout:20_000,
+    allowExitOnIdle:false
   });
+  pool.on("error", (error) => console.error("Errore PostgreSQL inatteso:", error.message));
   const query = (text, params = []) => pool.query(text, params);
 
   return {
     type:"postgres",
+    async ping() {
+      const result = await query("SELECT 1 AS ok");
+      return result.rows[0]?.ok === 1;
+    },
     async close() { await pool.end(); },
     async init() {
       await query(`
@@ -140,11 +156,20 @@ function createPostgresStore() {
           id BIGSERIAL PRIMARY KEY, body_area TEXT NOT NULL, name TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(body_area, name)
         );
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date TEXT NOT NULL DEFAULT '';
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS height DOUBLE PRECISION NOT NULL DEFAULT 0;
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+        CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
+        CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
+        CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
       `);
-      const count = Number((await query("SELECT COUNT(*) AS count FROM exercise_catalog")).rows[0].count);
-      if (count === 0) {
-        for (const [area, names] of Object.entries(defaultCatalog)) {
-          for (const name of names) await query("INSERT INTO exercise_catalog (body_area, name) VALUES ($1,$2)", [area, name]);
+      for (const [area, names] of Object.entries(defaultCatalog)) {
+        for (const name of names) {
+          await query(
+            "INSERT INTO exercise_catalog (body_area, name) VALUES ($1,$2) ON CONFLICT (body_area, name) DO NOTHING",
+            [area, name]
+          );
         }
       }
     },
@@ -185,15 +210,22 @@ function createPostgresStore() {
       return Number(result.rows[0].id);
     },
     async updatePerson(id, body) {
-      await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6 WHERE id=$7`,
+      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6 WHERE id=$7`,
         [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, id]);
+      return result.rowCount > 0;
     },
-    async deletePerson(id) { await query("DELETE FROM people WHERE id=$1", [id]); },
+    async deletePerson(id) {
+      const result = await query("DELETE FROM people WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
     async addCatalog(area, name) {
       const result = await query("INSERT INTO exercise_catalog (body_area,name) VALUES ($1,$2) RETURNING id", [area, name]);
       return Number(result.rows[0].id);
     },
-    async deleteCatalog(id) { await query("DELETE FROM exercise_catalog WHERE id=$1", [id]); },
+    async deleteCatalog(id) {
+      const result = await query("DELETE FROM exercise_catalog WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
     async addWorkout(body) {
       const client = await pool.connect();
       try {
@@ -216,7 +248,10 @@ function createPostgresStore() {
         client.release();
       }
     },
-    async deleteWorkout(id) { await query("DELETE FROM workouts WHERE id=$1", [id]); }
+    async deleteWorkout(id) {
+      const result = await query("DELETE FROM workouts WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    }
   };
 }
 

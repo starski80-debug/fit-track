@@ -3,8 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#151629">
+  <meta name="theme-color" content="#6657e8">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FitTrack">
   <title>FitTrack - Diario allenamenti</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -29,6 +36,7 @@
         <h1 id="page-title">Bentornato</h1>
       </div>
       <div class="header-actions">
+        <button class="install-app hidden" id="install-app" type="button">Installa</button>
         <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema">
           <span class="theme-icon">L</span>
         </button>
@@ -173,6 +181,26 @@
     </form>
   </dialog>
 
+  <dialog id="install-dialog" class="install-dialog">
+    <div class="install-content">
+      <div class="modal-head">
+        <div><p class="eyebrow">APP SUL TELEFONO</p><h2>Installa FitTrack</h2></div>
+        <button type="button" class="close">×</button>
+      </div>
+      <div class="install-icon"><img src="/icons/icon-192.png" alt=""></div>
+      <div id="ios-install-help">
+        <p>Su iPhone o iPad:</p>
+        <ol>
+          <li>Apri FitTrack con Safari.</li>
+          <li>Tocca il pulsante <strong>Condividi</strong>.</li>
+          <li>Scegli <strong>Aggiungi alla schermata Home</strong>.</li>
+          <li>Conferma con <strong>Aggiungi</strong>.</li>
+        </ol>
+      </div>
+      <p class="install-note">L’app userà sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+    </div>
+  </dialog>
+
   <template id="exercise-template">
     <div class="exercise-row">
       <select class="body-area" aria-label="Zona del corpo">
@@ -190,6 +218,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=8"></script>
+  <script src="/app.js?v=11"></script>
 </body>
 </html>

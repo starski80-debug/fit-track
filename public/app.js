@@ -1,4 +1,5 @@
 const state = { data: null, view: "dashboard", historyPersonId: null };
+let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const areas = { Petto:"PET", Schiena:"SCH", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
@@ -49,14 +50,40 @@ function toast(message) {
 }
 
 async function request(url, options) {
-  const response = await fetch(url, {
-    ...options,
-    headers: { "Content-Type": "application/json", ...(options?.headers || {}) }
-  });
-  const body = await response.json();
-  if (response.status === 401 && url !== "/api/auth/login") showLogin();
-  if (!response.ok) throw new Error(body.error || "Errore");
-  return body;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal:controller.signal,
+      credentials:"same-origin",
+      headers: { "Content-Type": "application/json", ...(options?.headers || {}) }
+    });
+    const body = await response.json();
+    if (response.status === 401 && url !== "/api/auth/login") showLogin();
+    if (!response.ok) throw new Error(body.error || "Errore");
+    return body;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Il server non risponde. Controlla la connessione e riprova.");
+    if (error instanceof TypeError) throw new Error("Connessione assente. Controlla internet e riprova.");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function setFormBusy(form, busy) {
+  const submit = form.querySelector('[type="submit"]');
+  if (!submit) return;
+  submit.disabled = busy;
+  submit.classList.toggle("is-loading", busy);
+  if (busy) {
+    submit.dataset.label = submit.textContent;
+    submit.textContent = "Attendi...";
+  } else if (submit.dataset.label) {
+    submit.textContent = submit.dataset.label;
+    delete submit.dataset.label;
+  }
 }
 
 function showLogin(message = "") {
@@ -410,7 +437,11 @@ document.addEventListener("change", (event) => {
 $("#catalog-filter").addEventListener("change", renderCatalog);
 $("#workout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
   const exercises = $$(".exercise-row").map((row) => ({
     bodyArea: $(".body-area", row).value,
     name: $(".exercise-name", row).value === "__custom__"
@@ -431,12 +462,20 @@ $("#workout-form").addEventListener("submit", async (event) => {
     $("#workout-dialog").close();
     await load();
     toast("Allenamento salvato!");
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 
 $("#person-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
   const form = new FormData(formElement);
   try {
     const id = form.get("id");
@@ -451,7 +490,12 @@ $("#person-form").addEventListener("submit", async (event) => {
     formElement.reset();
     await load();
     toast(id ? "Dati della persona aggiornati!" : "Persona aggiunta!");
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 
 $("#delete-person").addEventListener("click", async () => {
@@ -470,6 +514,9 @@ $("#delete-person").addEventListener("click", async () => {
 $("#catalog-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
   const form = new FormData(formElement);
   try {
     await request("/api/catalog", {
@@ -481,12 +528,20 @@ $("#catalog-form").addEventListener("submit", async (event) => {
     await load();
     switchView("catalog");
     toast("Esercizio aggiunto al catalogo!");
-  } catch (error) { toast(error.message); }
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
   const form = new FormData(formElement);
   try {
     await request("/api/auth/login", {
@@ -498,6 +553,9 @@ $("#login-form").addEventListener("submit", async (event) => {
     await load();
   } catch (error) {
     showLogin(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
   }
 });
 
@@ -505,6 +563,43 @@ $("#logout").addEventListener("click", async () => {
   await request("/api/auth/logout", { method:"POST" });
   state.data = null;
   showLogin();
+});
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function isIosDevice() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function updateInstallButton() {
+  const available = !isStandalone() && (Boolean(deferredInstallPrompt) || isIosDevice());
+  $("#install-app").classList.toggle("hidden", !available);
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  updateInstallButton();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  updateInstallButton();
+  toast("FitTrack installata!");
+});
+
+$("#install-app").addEventListener("click", async () => {
+  if (deferredInstallPrompt) {
+    deferredInstallPrompt.prompt();
+    await deferredInstallPrompt.userChoice;
+    deferredInstallPrompt = null;
+    updateInstallButton();
+    return;
+  }
+  $("#install-dialog").showModal();
 });
 
 $("#today").textContent = new Intl.DateTimeFormat("it-IT", {
@@ -524,6 +619,15 @@ $("#theme-toggle").addEventListener("click", () => {
   updateThemeIcon();
 });
 updateThemeIcon();
+updateInstallButton();
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      console.warn("Installazione PWA non disponibile.");
+    });
+  });
+}
 
 async function initialize() {
   try {

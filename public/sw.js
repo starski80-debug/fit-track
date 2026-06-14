@@ -1,0 +1,61 @@
+const CACHE_NAME = "fittrack-shell-v2";
+const STATIC_ASSETS = [
+  "/",
+  "/style.css",
+  "/app.js?v=11",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(STATIC_ASSETS.map(async (asset) => {
+        const response = await fetch(asset, { cache:"reload" });
+        if (!response.ok) throw new Error(`Asset non disponibile: ${asset}`);
+        await cache.put(asset, response);
+      }))
+    )
+  );
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  const url = new URL(request.url);
+  if (
+    request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/health"
+  ) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => response.ok ? response : Promise.reject(new Error("offline")))
+        .catch(() => caches.match("/"))
+    );
+    return;
+  }
+
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.put(request, response.clone())));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request))
+  );
+});

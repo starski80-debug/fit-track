@@ -436,7 +436,8 @@ $("#workout-form").addEventListener("submit", async (event) => {
 
 $("#person-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   try {
     const id = form.get("id");
     await request(id ? `/api/people/${id}` : "/api/people", {
@@ -447,7 +448,7 @@ $("#person-form").addEventListener("submit", async (event) => {
       })
     });
     $("#person-dialog").close();
-    event.currentTarget.reset();
+    formElement.reset();
     await load();
     toast(id ? "Dati della persona aggiornati!" : "Persona aggiunta!");
   } catch (error) { toast(error.message); }
@@ -468,14 +469,15 @@ $("#delete-person").addEventListener("click", async () => {
 
 $("#catalog-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   try {
     await request("/api/catalog", {
       method:"POST",
       body:JSON.stringify({ bodyArea:form.get("bodyArea"), name:form.get("name") })
     });
     $("#catalog-dialog").close();
-    event.currentTarget.reset();
+    formElement.reset();
     await load();
     switchView("catalog");
     toast("Esercizio aggiunto al catalogo!");
@@ -484,13 +486,14 @@ $("#catalog-form").addEventListener("submit", async (event) => {
 
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   try {
     await request("/api/auth/login", {
       method:"POST", body:JSON.stringify({ password:form.get("password") })
     });
     $("#login-dialog").close();
-    event.currentTarget.reset();
+    formElement.reset();
     $("#logout").classList.remove("hidden");
     await load();
   } catch (error) {

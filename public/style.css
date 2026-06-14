@@ -857,3 +857,118 @@ dialog form { padding:30px; }
   .mobile-nav small { font-size:8px; }
   .mobile-add { flex-basis:48px; width:48px; height:48px; }
 }
+
+/* iPhone app shell: compact, fixed and stable */
+@media (max-width:570px) {
+  :root { --mobile-bar-content:58px; }
+
+  .mobile-nav {
+    position:fixed;
+    right:0;
+    bottom:0;
+    left:0;
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    align-items:start;
+    height:calc(var(--mobile-bar-content) + env(safe-area-inset-bottom));
+    padding:0 3px env(safe-area-inset-bottom);
+    border-top:1px solid var(--line);
+    transform:translateZ(0);
+    backface-visibility:hidden;
+    contain:layout paint;
+  }
+  .mobile-nav .nav-item {
+    width:100%;
+    height:var(--mobile-bar-content);
+    min-height:0;
+    padding:7px 1px 5px;
+    border-radius:0;
+    font-size:14px;
+    line-height:1;
+  }
+  .mobile-nav small { font-size:8px; line-height:1; }
+  .mobile-add {
+    align-self:center;
+    justify-self:center;
+    width:44px;
+    height:44px;
+    min-width:44px;
+    min-height:44px;
+    margin:7px 0 0;
+    border:0;
+    border-radius:14px;
+    font-size:25px;
+    line-height:1;
+    box-shadow:0 5px 14px rgba(102,87,232,.28);
+  }
+  main {
+    padding-bottom:calc(var(--mobile-bar-content) + env(safe-area-inset-bottom) + 14px);
+  }
+  #toast { bottom:calc(var(--mobile-bar-content) + env(safe-area-inset-bottom) + 10px); }
+
+  .app-standalone,
+  .app-standalone body {
+    width:100%;
+    height:100%;
+    min-height:100%;
+    overflow:hidden;
+    overscroll-behavior:none;
+  }
+  .app-standalone body {
+    position:fixed;
+    inset:0;
+    background:var(--bg);
+  }
+  .app-standalone main {
+    height:100dvh;
+    max-height:100dvh;
+    overflow-x:hidden;
+    overflow-y:auto;
+    padding-top:calc(8px + env(safe-area-inset-top));
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    scroll-padding-top:calc(54px + env(safe-area-inset-top));
+  }
+  .app-standalone header {
+    top:calc(-8px - env(safe-area-inset-top));
+    min-height:50px;
+    margin:
+      calc(-8px - env(safe-area-inset-top))
+      -14px
+      12px;
+    padding:
+      calc(8px + env(safe-area-inset-top))
+      14px
+      7px;
+  }
+  .app-standalone header .eyebrow { display:none; }
+  .app-standalone h1 { font-size:20px; }
+  .app-standalone .theme-toggle { width:36px; height:36px; }
+  .app-standalone .install-app { display:none; }
+  .app-standalone .hero {
+    min-height:142px;
+    padding:19px 18px;
+    border-radius:17px;
+  }
+  .app-standalone .hero .pill { font-size:8px; padding:5px 8px; }
+  .app-standalone .hero h2 { margin:12px 0 7px; font-size:25px; }
+  .app-standalone .hero p {
+    max-width:270px;
+    font-size:11px;
+    line-height:1.4;
+  }
+  .app-standalone .stats { margin:9px 0 22px; }
+  .app-standalone .stat { min-height:72px; padding:12px; }
+  .app-standalone .stat b { margin-top:4px; font-size:19px; }
+  .app-standalone .section-head { margin:18px 0 10px; }
+  .app-standalone .section-head h2 { font-size:18px; }
+  .app-standalone .section-help { margin-bottom:11px; }
+  .app-standalone .workout-list,
+  .app-standalone .history-days { gap:8px; }
+  .app-standalone .workout-card { padding:12px; }
+  .app-standalone .people-grid,
+  .app-standalone .history-people,
+  .app-standalone .catalog-grid { gap:8px; }
+  .app-standalone .person-card,
+  .app-standalone .history-person { padding:14px; }
+}

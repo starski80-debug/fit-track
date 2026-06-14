@@ -579,6 +579,11 @@ function updateInstallButton() {
   $("#install-app").classList.toggle("hidden", !available);
 }
 
+function applyDeviceMode() {
+  document.documentElement.classList.toggle("app-standalone", isStandalone());
+  document.documentElement.classList.toggle("device-ios", isIosDevice());
+}
+
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   deferredInstallPrompt = event;
@@ -619,13 +624,21 @@ $("#theme-toggle").addEventListener("click", () => {
   updateThemeIcon();
 });
 updateThemeIcon();
+applyDeviceMode();
 updateInstallButton();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
+    navigator.serviceWorker.register("/sw.js").then((registration) => {
+      registration.update().catch(() => {});
+    }).catch(() => {
       console.warn("Installazione PWA non disponibile.");
     });
+  });
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (sessionStorage.getItem("fittrack-sw-reloaded")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded", "1");
+    window.location.reload();
   });
 }
 

@@ -1,8 +1,8 @@
-const CACHE_NAME = "fittrack-shell-v2";
+const CACHE_NAME = "fittrack-shell-v3";
 const STATIC_ASSETS = [
   "/",
   "/style.css",
-  "/app.js?v=11",
+  "/app.js?v=12",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png"

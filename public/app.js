@@ -636,8 +636,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v13")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v13", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v14")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v14", "1");
     window.location.reload();
   });
 }

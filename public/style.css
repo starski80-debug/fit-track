@@ -495,7 +495,14 @@ dialog form { padding:30px; }
 [data-theme="dark"] .chart-label { fill:#9ba4b5; }
 
 @media (max-width:850px) {
-  main { padding:22px 18px 104px; }
+  html,body { width:100%; max-width:100%; overflow-x:hidden; }
+  main {
+    width:auto;
+    max-width:none;
+    margin-left:0;
+    padding:22px 18px 104px;
+    overflow-x:hidden;
+  }
   header { min-height:48px; }
   .header-actions .primary { display:none; }
   .install-app { min-height:40px; padding:8px 10px; }
@@ -533,9 +540,15 @@ dialog form { padding:30px; }
   html { -webkit-text-size-adjust:100%; }
   body { overflow-x:hidden; }
   main {
-    width:100%;
+    width:auto;
+    min-width:0;
+    max-width:none;
+    margin-left:0;
     padding:18px 14px calc(104px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
   }
+  main > *,
+  .view { min-width:0; max-width:100%; }
   header {
     position:sticky;
     top:0;
@@ -932,6 +945,10 @@ dialog form { padding:30px; }
     background:var(--bg);
   }
   .app-standalone main {
+    width:auto;
+    min-width:0;
+    max-width:none;
+    margin-left:0;
     height:100dvh;
     max-height:100dvh;
     overflow-x:hidden;
@@ -996,6 +1013,10 @@ dialog form { padding:30px; }
   }
   body { position:fixed; inset:0; }
   main {
+    width:auto;
+    min-width:0;
+    max-width:none;
+    margin-left:0;
     height:100dvh;
     max-height:100dvh;
     overflow-x:hidden;

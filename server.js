@@ -392,6 +392,23 @@ async function api(req, res, url) {
     }
     return json(res, 200, { ok:true });
   }
+  if (req.method === "POST" && url.pathname === "/api/workout-groups/rpe-link") {
+    const raw = await readBody(req);
+    const ids = normalizeWorkoutIds(raw.workoutIds);
+    if (!ids.length) return json(res, 400, { error:"Sessione non trovata." });
+    const token = crypto.randomBytes(24).toString("hex");
+    const workout = await store.prepareRpeGroupLink(ids, token);
+    if (!workout) return json(res, 404, { error:"Sessione non trovata." });
+    const phone = whatsappNumber(workout.person_phone);
+    if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
+    const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}`;
+    return json(res, 200, {
+      ok:true,
+      url:rpeUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
   const workoutMatch = url.pathname.match(/^\/api\/workouts\/(\d+)$/);
   if (req.method === "POST" && workoutMatch && url.pathname.endsWith("/rpe-link")) {
     return false;

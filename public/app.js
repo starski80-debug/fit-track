@@ -242,6 +242,7 @@ function renderHistory() {
     ["Unita media", formatNumber(averageUnits)]
   ].map(([label, value]) => `<div class="history-stat"><span>${label}</span><b>${value}</b></div>`).join("");
   $("#progress-chart").innerHTML = progressChart(groupedDays);
+  $("#rpe-progress-chart").innerHTML = rpeTrendChart(groupedDays);
   $("#history-days").innerHTML = groupedDays.map(dayCard).join("") ||
     `<div class="empty">Nessun allenamento registrato per ${escapeHtml(person.name)}.</div>`;
 }
@@ -255,12 +256,32 @@ function formatNumber(value) {
   return new Intl.NumberFormat("it-IT", { maximumFractionDigits:1 }).format(value || 0);
 }
 
+function hasRpe(workout) {
+  return workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "";
+}
+
+function rpeSummary(values) {
+  const unique = [...new Set(values.map((value) => Number(value)))].filter((value) => Number.isFinite(value));
+  if (!unique.length) return "";
+  if (unique.length === 1) {
+    const value = unique[0];
+    return `RPE ${value}${rpeLabels[value] ? ` - ${rpeLabels[value]}` : ""}`;
+  }
+  return `RPE ${unique.join(" / ")}`;
+}
+
+function dayRpeValue(day) {
+  const values = (day.rpes || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 function groupWorkoutsByDay(workouts) {
   const groups = new Map();
   for (const workout of workouts) {
     if (!groups.has(workout.workout_date)) {
       groups.set(workout.workout_date, {
-        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], units:0
+        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], units:0, rpes:[]
       });
     }
     const day = groups.get(workout.workout_date);
@@ -268,6 +289,7 @@ function groupWorkoutsByDay(workouts) {
     day.exercises.push(...workout.exercises);
     day.duration += Number(workout.duration || 0);
     if (workout.notes) day.notes.push(workout.notes);
+    if (hasRpe(workout)) day.rpes.push(workout.rpe);
     day.units += workout.exercises.reduce((sum, exercise) => sum + exerciseUnits(exercise), 0);
   }
   return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date));
@@ -276,12 +298,12 @@ function groupWorkoutsByDay(workouts) {
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
   const groupIds = day.workouts.map((workout) => workout.id).join(",");
-  const firstWorkoutId = day.workouts[0]?.id || "";
+  const dayRpe = rpeSummary(day.rpes || []);
   const sessionActions = groupIds ? `
     <button type="button" class="session-edit" data-edit-workout-group="${escapeHtml(groupIds)}">
       Modifica
     </button>
-    <button type="button" class="session-edit whatsapp-button" data-rpe-whatsapp="${firstWorkoutId}">
+    <button type="button" class="session-edit whatsapp-button" data-rpe-whatsapp-group="${escapeHtml(groupIds)}">
       Invia RPE
     </button>
   ` : "";
@@ -302,7 +324,14 @@ function dayCard(day) {
   }).join("");
   return `<article class="day-card">
     <div class="day-head">
-      <div><h3>${formatDate(day.date)}</h3><p>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"} · ${day.duration} minuti</p></div>
+      <div>
+        <h3>${formatDate(day.date)}</h3>
+        <p class="day-meta">
+          <span>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"}</span>
+          <span>${day.duration} minuti</span>
+          ${dayRpe ? `<span class="rpe-chip">${escapeHtml(dayRpe)}</span>` : ""}
+        </p>
+      </div>
       <div class="day-volume"><b>${formatNumber(day.units)}</b><span>unita totale</span></div>
     </div>
     <div class="day-actions">${sessionActions}</div>
@@ -348,6 +377,45 @@ function progressChart(days) {
   return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico delle unita di allenamento">
     <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6c63ff" stop-opacity=".24"/><stop offset="100%" stop-color="#6c63ff" stop-opacity=".02"/></linearGradient></defs>
     ${grid}<polygon class="chart-area" points="${area}"/><polyline class="chart-line" points="${line}"/>${dots}${dateLabels}
+  </svg>`;
+}
+
+function rpeTrendChart(days) {
+  const points = [...days]
+    .reverse()
+    .map((day) => ({ ...day, rpeValue:dayRpeValue(day) }))
+    .filter((day) => day.rpeValue !== null)
+    .slice(-12);
+  if (!points.length) return `<div class="empty">Il grafico RPE comparira dopo la prima risposta.</div>`;
+  const width = 760;
+  const height = 230;
+  const padding = { left:45, right:20, top:25, bottom:38 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const coordinates = points.map((day, index) => ({
+    ...day,
+    x:padding.left + (points.length === 1 ? chartWidth / 2 : index * chartWidth / (points.length - 1)),
+    y:padding.top + chartHeight - (day.rpeValue / 10) * chartHeight
+  }));
+  const line = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${coordinates[0].x},${padding.top + chartHeight} ${line} ${coordinates.at(-1).x},${padding.top + chartHeight}`;
+  const grid = [0, .25, .5, .75, 1].map((ratio) => {
+    const y = padding.top + chartHeight * ratio;
+    const value = 10 * (1 - ratio);
+    return `<line class="chart-grid" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>
+      <text class="chart-label" x="${padding.left - 8}" y="${y + 4}" text-anchor="end">${formatNumber(value)}</text>`;
+  }).join("");
+  const dateLabels = coordinates.map((point, index) => {
+    if (points.length > 7 && index % 2 && index !== points.length - 1) return "";
+    const label = new Intl.DateTimeFormat("it-IT", { day:"2-digit", month:"2-digit" }).format(new Date(`${point.date}T12:00:00`));
+    return `<text class="chart-label" x="${point.x}" y="${height - 12}" text-anchor="middle">${label}</text>`;
+  }).join("");
+  const dots = coordinates.map((point) => `<circle class="chart-dot rpe-chart-dot" cx="${point.x}" cy="${point.y}" r="5">
+    <title>${formatDate(point.date)}: RPE ${formatNumber(point.rpeValue)}</title>
+  </circle>`).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico RPE nel tempo">
+    <defs><linearGradient id="rpeChartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#16a36f" stop-opacity=".24"/><stop offset="100%" stop-color="#16a36f" stop-opacity=".02"/></linearGradient></defs>
+    ${grid}<polygon class="chart-area rpe-chart-area" points="${area}"/><polyline class="chart-line rpe-chart-line" points="${line}"/>${dots}${dateLabels}
   </svg>`;
 }
 
@@ -535,6 +603,20 @@ document.addEventListener("click", async (event) => {
       const data = await request(`/api/workouts/${rpeWhatsappButton.dataset.rpeWhatsapp}/rpe-link`, { method:"POST" });
       window.open(data.whatsappUrl, "_blank", "noopener");
       toast("WhatsApp aperto con il messaggio RPE.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+  const rpeWhatsappGroupButton = event.target.closest("[data-rpe-whatsapp-group]");
+  if (rpeWhatsappGroupButton) {
+    try {
+      const workoutIds = rpeWhatsappGroupButton.dataset.rpeWhatsappGroup.split(",").map(Number).filter(Boolean);
+      const data = await request("/api/workout-groups/rpe-link", {
+        method:"POST",
+        body:JSON.stringify({ workoutIds })
+      });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il messaggio RPE della sessione.");
     } catch (error) {
       toast(error.message);
     }
@@ -790,8 +872,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v23")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v23", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v26")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v26", "1");
     window.location.reload();
   });
 }

@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=23">
+  <link rel="stylesheet" href="/style.css?v=26">
 </head>
 <body>
   <aside class="sidebar">
@@ -79,6 +79,13 @@
             <span>Serie x ripetizioni x (kg + secondi)</span>
           </div>
           <div id="progress-chart" class="progress-chart"></div>
+        </section>
+        <section class="chart-card">
+          <div class="chart-head">
+            <div><p class="eyebrow">RPE</p><h3>Sforzo percepito nel tempo</h3></div>
+            <span>Scala 0-10 della sessione</span>
+          </div>
+          <div id="rpe-progress-chart" class="progress-chart rpe-progress-chart"></div>
         </section>
         <div class="section-head history-days-head">
           <div><p class="eyebrow">GIORNO PER GIORNO</p><h2>Allenamenti</h2></div>
@@ -266,6 +273,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=23"></script>
+  <script src="/app.js?v=26"></script>
 </body>
 </html>

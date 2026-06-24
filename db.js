@@ -190,6 +190,19 @@ function createSqliteStore() {
         WHERE w.id = ?
       `).get(id) || null;
     },
+    async prepareRpeGroupLink(ids, token) {
+      const placeholders = ids.map(() => "?").join(",");
+      const rows = db.prepare(`
+        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.id IN (${placeholders})
+        ORDER BY w.workout_date DESC, w.id
+      `).all(...ids);
+      if (!rows.length) return null;
+      const sharedToken = rows.find((item) => item.rpe_token)?.rpe_token || token;
+      db.prepare(`UPDATE workouts SET rpe_token=? WHERE id IN (${placeholders})`).run(sharedToken, ...ids);
+      return { ...rows[0], rpe_token:sharedToken };
+    },
     async workoutByRpeToken(token) {
       return db.prepare(`
         SELECT w.id, w.workout_date, w.rpe, w.rpe_token, p.name AS person_name
@@ -427,6 +440,18 @@ function createPostgresStore() {
         WHERE w.id=$1
       `, [id]);
       return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id) } : null;
+    },
+    async prepareRpeGroupLink(ids, token) {
+      const current = await query(`
+        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.id = ANY($1::bigint[])
+        ORDER BY w.workout_date DESC, w.id
+      `, [ids]);
+      if (!current.rowCount) return null;
+      const sharedToken = current.rows.find((item) => item.rpe_token)?.rpe_token || token;
+      await query("UPDATE workouts SET rpe_token=$1 WHERE id = ANY($2::bigint[])", [sharedToken, ids]);
+      return { ...current.rows[0], id:Number(current.rows[0].id), rpe_token:sharedToken };
     },
     async workoutByRpeToken(token) {
       const result = await query(`

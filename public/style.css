@@ -83,6 +83,9 @@ h2 { margin-bottom:0; }
 .chart-line { fill:none; stroke:var(--accent); stroke-width:3; stroke-linecap:round; stroke-linejoin:round; }
 .chart-area { fill:url(#chartFill); }
 .chart-dot { fill:#fff; stroke:var(--accent); stroke-width:3; }
+.rpe-chart-line { stroke:#16a36f; }
+.rpe-chart-area { fill:url(#rpeChartFill); }
+.rpe-chart-dot { stroke:#16a36f; }
 .chart-label { fill:#898a9b; font-size:11px; }
 .chart-value { fill:#55566b; font-size:10px; font-weight:700; }
 .history-days-head { margin-top:28px; }
@@ -91,6 +94,9 @@ h2 { margin-bottom:0; }
 .day-head { background:#fafafe; border-bottom:1px solid var(--line); padding:17px 20px; display:flex; justify-content:space-between; align-items:center; gap:15px; }
 .day-head h3 { margin:0 0 4px; font-size:16px; }
 .day-head p { margin:0; color:var(--muted); font-size:12px; }
+.day-meta { display:flex; flex-wrap:wrap; gap:7px; margin-top:7px; }
+.day-meta span { background:#eef0ff; color:#37386f; border:1px solid #dcdef8; border-radius:999px; padding:6px 10px; font-size:13px; font-weight:800; line-height:1; }
+.day-meta .rpe-chip { background:#eaf8f1; color:#147250; border-color:#cdeedd; }
 .day-volume { text-align:right; }
 .day-volume b { display:block; font-size:17px; }
 .day-volume span { color:var(--muted); font-size:11px; }
@@ -501,6 +507,8 @@ dialog form { padding:30px; }
 [data-theme="dark"] .area-tag[data-area="Addome"] { background:#443b1d; color:#e9cd72; }
 [data-theme="dark"] .area-tag[data-area="Cardio"] { background:#44263a; color:#f09acb; }
 [data-theme="dark"] .area-tag[data-area="Altro"] { background:#2b3340; color:#c0c7d2; }
+[data-theme="dark"] .day-meta span { background:#252d44; color:#dbe1ff; border-color:#38425c; }
+[data-theme="dark"] .day-meta .rpe-chip { background:#18382b; color:#8ee0b8; border-color:#27543f; }
 [data-theme="dark"] .chart-grid { stroke:#2c3545; }
 [data-theme="dark"] .chart-label { fill:#9ba4b5; }
 
@@ -679,6 +687,8 @@ dialog form { padding:30px; }
   .day-head { align-items:flex-start; gap:8px; padding:14px; }
   .day-head h3 { font-size:15px; }
   .day-head p { line-height:1.4; }
+  .day-meta { gap:6px; }
+  .day-meta span { padding:6px 8px; font-size:12px; }
   .day-volume { flex:0 0 auto; }
   .day-volume b { font-size:15px; }
   .day-volume span { font-size:9px; }

@@ -58,10 +58,14 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
   assert.match(html, /Telefono WhatsApp/);
   assert.match(app, /data-rpe-whatsapp/);
+  assert.match(app, /data-rpe-whatsapp-group/);
+  assert.match(app, /\/api\/workout-groups\/rpe-link/);
   assert.match(app, /whatsappUrl/);
   assert.match(server, /rpeLinkMatch/);
   assert.match(server, /rpe-link/);
+  assert.match(server, /\/api\/workout-groups\/rpe-link/);
   assert.match(server, /\/api\/rpe\//);
+  assert.match(server, /prepareRpeGroupLink/);
   assert.match(server, /https:\/\/wa\.me/);
   assert.match(server, /function rpeHtml/);
   assert.match(server, /workout\.rpe_token \|\| token/);
@@ -69,16 +73,24 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   assert.match(server, /0, "Rest"/);
   assert.match(database, /phone TEXT NOT NULL DEFAULT ''/);
   assert.match(database, /rpe_token TEXT NOT NULL DEFAULT ''/);
+  assert.match(database, /async prepareRpeGroupLink/);
 });
 
 test("lo storico raggruppa per giorno e mostra il grafico", () => {
   const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
   const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
   assert.match(html, /progress-chart/);
+  assert.match(html, /rpe-progress-chart/);
+  assert.match(html, /Sforzo percepito nel tempo/);
   assert.match(html, /history-days/);
   assert.match(app, /function groupWorkoutsByDay/);
   assert.match(app, /function progressChart/);
+  assert.match(app, /function rpeTrendChart/);
+  assert.match(app, /function dayRpeValue/);
   assert.match(app, /function exerciseUnits/);
+  assert.match(app, /function rpeSummary/);
+  assert.match(app, /class="day-meta"/);
+  assert.match(app, /rpe-chip/);
 });
 
 test("gli allenamenti supportano modifica, RPE, operatore, fasi e secondi", () => {
@@ -231,5 +243,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v14/);
+  assert.match(worker, /fittrack-shell-v17/);
 });

@@ -46,9 +46,20 @@ function createSqliteStore() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, body_area TEXT NOT NULL, name TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(body_area, name)
     );
+    CREATE TABLE IF NOT EXISTS scheduled_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+      scheduled_date TEXT NOT NULL,
+      scheduled_time TEXT NOT NULL DEFAULT '',
+      trainer TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'scheduled',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
     CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
     CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
+    CREATE INDEX IF NOT EXISTS idx_schedule_date_time ON scheduled_sessions(scheduled_date, scheduled_time);
   `);
   const columns = db.prepare("PRAGMA table_info(people)").all().map((item) => item.name);
   for (const [name, definition] of [
@@ -92,13 +103,18 @@ function createSqliteStore() {
     async dashboard() {
       const people = db.prepare("SELECT * FROM people ORDER BY name").all();
       const catalog = db.prepare("SELECT * FROM exercise_catalog ORDER BY body_area, name COLLATE NOCASE").all();
+      const schedule = db.prepare(`
+        SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
+        FROM scheduled_sessions s JOIN people p ON p.id = s.person_id
+        ORDER BY s.scheduled_date ASC, s.scheduled_time ASC, s.id ASC
+      `).all();
       const workouts = db.prepare(`
         SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
         FROM workouts w JOIN people p ON p.id = w.person_id
         ORDER BY w.workout_date DESC, w.id DESC
       `).all();
       const exercises = db.prepare("SELECT * FROM exercises WHERE workout_id = ? ORDER BY id");
-      return { people, catalog, workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) })) };
+      return { people, catalog, schedule, workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) })) };
     },
     async addPerson(body) {
       return Number(db.prepare(`
@@ -114,6 +130,22 @@ function createSqliteStore() {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
     async deleteCatalog(id) { return db.prepare("DELETE FROM exercise_catalog WHERE id=?").run(id).changes > 0; },
+    async addSchedule(body) {
+      return Number(db.prepare(`
+        INSERT INTO scheduled_sessions (person_id, scheduled_date, scheduled_time, trainer, notes, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(body.personId, body.date, body.time, body.trainer, body.notes, body.status).lastInsertRowid);
+    },
+    async updateSchedule(id, body) {
+      return db.prepare(`
+        UPDATE scheduled_sessions
+        SET person_id=?, scheduled_date=?, scheduled_time=?, trainer=?, notes=?, status=?
+        WHERE id=?
+      `).run(body.personId, body.date, body.time, body.trainer, body.notes, body.status, id).changes > 0;
+    },
+    async deleteSchedule(id) {
+      return db.prepare("DELETE FROM scheduled_sessions WHERE id=?").run(id).changes > 0;
+    },
     async addWorkout(body) {
       db.exec("BEGIN");
       try {
@@ -267,6 +299,16 @@ function createPostgresStore() {
           id BIGSERIAL PRIMARY KEY, body_area TEXT NOT NULL, name TEXT NOT NULL,
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(body_area, name)
         );
+        CREATE TABLE IF NOT EXISTS scheduled_sessions (
+          id BIGSERIAL PRIMARY KEY,
+          person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+          scheduled_date TEXT NOT NULL,
+          scheduled_time TEXT NOT NULL DEFAULT '',
+          trainer TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          status TEXT NOT NULL DEFAULT 'scheduled',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
         ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS height DOUBLE PRECISION NOT NULL DEFAULT 0;
         ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
@@ -291,6 +333,7 @@ function createPostgresStore() {
         CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
         CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
         CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
+        CREATE INDEX IF NOT EXISTS idx_schedule_date_time ON scheduled_sessions(scheduled_date, scheduled_time);
       `);
       for (const [area, names] of Object.entries(defaultCatalog)) {
         for (const name of names) {
@@ -302,9 +345,12 @@ function createPostgresStore() {
       }
     },
     async dashboard() {
-      const [people, catalog, workouts, exercises] = await Promise.all([
+      const [people, catalog, schedule, workouts, exercises] = await Promise.all([
         query("SELECT * FROM people ORDER BY name"),
         query("SELECT * FROM exercise_catalog ORDER BY body_area, LOWER(name)"),
+        query(`SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
+          FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
+          ORDER BY s.scheduled_date ASC, s.scheduled_time ASC, s.id ASC`),
         query(`SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
           FROM workouts w JOIN people p ON p.id=w.person_id
           ORDER BY w.workout_date DESC, w.id DESC`),
@@ -319,6 +365,7 @@ function createPostgresStore() {
       return {
         people:people.rows.map((item) => ({ ...item, id:Number(item.id) })),
         catalog:catalog.rows.map((item) => ({ ...item, id:Number(item.id) })),
+        schedule:schedule.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id) })),
         workouts:workouts.rows.map((item) => ({
           ...item,
           id:Number(item.id),
@@ -352,6 +399,25 @@ function createPostgresStore() {
     },
     async deleteCatalog(id) {
       const result = await query("DELETE FROM exercise_catalog WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
+    async addSchedule(body) {
+      const result = await query(`
+        INSERT INTO scheduled_sessions (person_id,scheduled_date,scheduled_time,trainer,notes,status)
+        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
+      `, [body.personId, body.date, body.time, body.trainer, body.notes, body.status]);
+      return Number(result.rows[0].id);
+    },
+    async updateSchedule(id, body) {
+      const result = await query(`
+        UPDATE scheduled_sessions
+        SET person_id=$1,scheduled_date=$2,scheduled_time=$3,trainer=$4,notes=$5,status=$6
+        WHERE id=$7
+      `, [body.personId, body.date, body.time, body.trainer, body.notes, body.status, id]);
+      return result.rowCount > 0;
+    },
+    async deleteSchedule(id) {
+      const result = await query("DELETE FROM scheduled_sessions WHERE id=$1", [id]);
       return result.rowCount > 0;
     },
     async addWorkout(body) {

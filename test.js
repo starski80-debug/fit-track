@@ -76,6 +76,36 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   assert.match(database, /async prepareRpeGroupLink/);
 });
 
+test("la home include agenda calendario per gli appuntamenti", () => {
+  const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
+  const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
+  const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+  const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "public/style.css"), "utf8");
+  assert.match(html, /Calendario allenamenti/);
+  assert.match(html, /schedule-form/);
+  assert.match(html, /schedule-person/);
+  assert.match(html, /Leonardo/);
+  assert.match(app, /function renderSchedule/);
+  assert.match(app, /Promemoria di domani/);
+  assert.match(app, /data-schedule-reminder/);
+  assert.match(app, /function whatsappReminderUrl/);
+  assert.match(app, /wa\.me/);
+  assert.match(app, /function openScheduleEdit/);
+  assert.match(app, /data-edit-schedule/);
+  assert.match(app, /data-delete-schedule/);
+  assert.match(app, /method:id \? "PUT" : "POST"/);
+  assert.match(app, /\/api\/schedule/);
+  assert.match(server, /function normalizeSchedule/);
+  assert.match(server, /POST" && url\.pathname === "\/api\/schedule"/);
+  assert.match(server, /req\.method === "PUT" && scheduleMatch/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS scheduled_sessions/);
+  assert.match(database, /async addSchedule/);
+  assert.match(database, /async updateSchedule/);
+  assert.match(css, /schedule-panel/);
+  assert.match(css, /schedule-reminders/);
+});
+
 test("lo storico raggruppa per giorno e mostra il grafico", () => {
   const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
   const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
@@ -215,6 +245,7 @@ test("il backend protegge le API e risponde al controllo reale", { timeout:20_00
   const body = await dashboard.json();
   assert.ok(Array.isArray(body.people));
   assert.ok(Array.isArray(body.catalog));
+  assert.ok(Array.isArray(body.schedule));
 
   const missing = await fetch(`${base}/api/workouts/999999999`, {
     method:"DELETE", headers:{ Cookie:cookie }
@@ -243,5 +274,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v17/);
+  assert.match(worker, /fittrack-shell-v20/);
 });

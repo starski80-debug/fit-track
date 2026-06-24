@@ -149,6 +149,18 @@ function normalizeWorkout(body) {
   };
 }
 
+function normalizeSchedule(body) {
+  const time = String(body.time || "").trim();
+  return {
+    personId:positiveInteger(body.personId),
+    date:validDate(body.date),
+    time:/^\d{2}:\d{2}$/.test(time) ? time : "",
+    trainer:operators.has(body.trainer) ? body.trainer : "",
+    notes:cleanText(body.notes, 500),
+    status:["scheduled", "done"].includes(body.status) ? body.status : "scheduled"
+  };
+}
+
 function normalizeWorkoutIds(value) {
   return [...new Set((Array.isArray(value) ? value : [])
     .map(positiveInteger)
@@ -369,6 +381,31 @@ async function api(req, res, url) {
   if (req.method === "DELETE" && catalogMatch) {
     if (!await store.deleteCatalog(Number(catalogMatch[1]))) {
       return json(res, 404, { error:"Esercizio non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/schedule") {
+    const body = normalizeSchedule(await readBody(req));
+    if (!body.personId || !body.date || !body.time || !body.trainer) {
+      return json(res, 400, { error:"Completa persona, data, orario e personal trainer." });
+    }
+    return json(res, 201, { id:await store.addSchedule(body) });
+  }
+  const scheduleMatch = url.pathname.match(/^\/api\/schedule\/(\d+)$/);
+  if (req.method === "PUT" && scheduleMatch) {
+    const body = normalizeSchedule(await readBody(req));
+    if (!body.personId || !body.date || !body.time || !body.trainer) {
+      return json(res, 400, { error:"Completa persona, data, orario e personal trainer." });
+    }
+    if (!await store.updateSchedule(Number(scheduleMatch[1]), body)) {
+      return json(res, 404, { error:"Appuntamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && scheduleMatch) {
+    if (!await store.deleteSchedule(Number(scheduleMatch[1]))) {
+      return json(res, 404, { error:"Appuntamento non trovato." });
     }
     return json(res, 200, { ok:true });
   }

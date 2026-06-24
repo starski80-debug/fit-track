@@ -1,4 +1,4 @@
-const state = { data: null, view: "dashboard", historyPersonId: null, peopleSearch: "" };
+const state = { data: null, view: "dashboard", historyPersonId: null, peopleSearch: "", scheduleDate:new Date().toISOString().slice(0, 10) };
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -143,6 +143,88 @@ function workoutCard(workout) {
   </article>`;
 }
 
+function scheduleCard(item) {
+  const reminderText = `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!`;
+  return `<article class="schedule-item">
+    <div class="schedule-time">${escapeHtml(item.scheduled_time || "--:--")}</div>
+    <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
+    <div class="schedule-body">
+      <h3>${escapeHtml(item.person_name)}</h3>
+      <p>${formatDate(item.scheduled_date)} · PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
+      ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
+    </div>
+    <div class="schedule-item-actions">
+      <button type="button" class="schedule-reminder whatsapp-button" data-schedule-reminder="${item.id}">WhatsApp</button>
+      <button type="button" class="schedule-edit" data-edit-schedule="${item.id}">Modifica</button>
+      <button type="button" class="schedule-delete" data-delete-schedule="${item.id}">Elimina</button>
+    </div>
+    <span class="hidden" data-reminder-text="${item.id}">${escapeHtml(reminderText)}</span>
+  </article>`;
+}
+
+function resetScheduleForm() {
+  const form = $("#schedule-form");
+  form.reset();
+  form.elements.id.value = "";
+  $("#schedule-submit").textContent = "Aggiungi in agenda";
+  $("#schedule-cancel-edit").classList.add("hidden");
+}
+
+function openScheduleEdit(item) {
+  const form = $("#schedule-form");
+  state.scheduleDate = item.scheduled_date;
+  $("#schedule-date").value = state.scheduleDate;
+  form.elements.id.value = item.id;
+  form.elements.personId.value = item.person_id;
+  form.elements.trainer.value = item.trainer || "";
+  form.elements.time.value = item.scheduled_time || "";
+  form.elements.notes.value = item.notes || "";
+  $("#schedule-submit").textContent = "Salva modifiche";
+  $("#schedule-cancel-edit").classList.remove("hidden");
+  renderSchedule();
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function renderSchedule() {
+  const schedule = state.data.schedule || [];
+  $("#schedule-date").value = state.scheduleDate;
+  $("#schedule-person").innerHTML = state.data.people.map((person) =>
+    `<option value="${person.id}">${escapeHtml(person.name)}</option>`
+  ).join("");
+  const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
+  const upcoming = schedule
+    .filter((item) => item.scheduled_date > state.scheduleDate)
+    .slice(0, 6);
+  const tomorrow = tomorrowDate();
+  const reminders = schedule.filter((item) => item.scheduled_date === tomorrow);
+  $("#schedule-list").innerHTML = `
+    <div class="schedule-column schedule-reminders">
+      <h3>Promemoria di domani</h3>
+      ${reminders.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun promemoria per domani.</div>`}
+    </div>
+    <div class="schedule-column">
+      <h3>${formatDate(state.scheduleDate)}</h3>
+      ${selected.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessuno in agenda per questo giorno.</div>`}
+    </div>
+    <div class="schedule-column">
+      <h3>Prossimi appuntamenti</h3>
+      ${upcoming.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun appuntamento futuro.</div>`}
+    </div>
+  `;
+}
+
+function tomorrowDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function whatsappReminderUrl(item, text) {
+  const phone = String(item.person_phone || "").replace(/[^\d]/g, "");
+  if (!phone) return "";
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+}
+
 function render() {
   const { people, workouts, stats } = state.data;
   $("#stats").innerHTML = [
@@ -154,6 +236,7 @@ function render() {
 
   $("#recent-workouts").innerHTML = workouts.slice(0, 4).map(workoutCard).join("") ||
     `<div class="empty">Nessun allenamento registrato.</div>`;
+  renderSchedule();
   renderHistory();
   const peopleFilter = state.peopleSearch.trim().toLowerCase();
   const visiblePeople = people.filter((person) => [
@@ -621,6 +704,32 @@ document.addEventListener("click", async (event) => {
       toast(error.message);
     }
   }
+  const scheduleEditButton = event.target.closest("[data-edit-schedule]");
+  if (scheduleEditButton) {
+    const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleEditButton.dataset.editSchedule));
+    if (item) openScheduleEdit(item);
+  }
+  const scheduleReminderButton = event.target.closest("[data-schedule-reminder]");
+  if (scheduleReminderButton) {
+    const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleReminderButton.dataset.scheduleReminder));
+    if (item) {
+      const text = `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!`;
+      const url = whatsappReminderUrl(item, text);
+      if (!url) return toast("Inserisci il telefono WhatsApp nella scheda della persona.");
+      window.open(url, "_blank", "noopener");
+      toast("WhatsApp aperto con il promemoria.");
+    }
+  }
+  const scheduleDeleteButton = event.target.closest("[data-delete-schedule]");
+  if (scheduleDeleteButton && confirm("Eliminare questo appuntamento dall'agenda?")) {
+    try {
+      await request(`/api/schedule/${scheduleDeleteButton.dataset.deleteSchedule}`, { method:"DELETE" });
+      await load();
+      toast("Appuntamento eliminato.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
   const deleteButton = event.target.closest("[data-delete]");
   if (deleteButton && confirm("Eliminare questo allenamento?")) {
     await request(`/api/workouts/${deleteButton.dataset.delete}`, { method:"DELETE" });
@@ -657,8 +766,43 @@ $("#people-search").addEventListener("input", (event) => {
   state.peopleSearch = event.target.value;
   render();
 });
+$("#schedule-date").addEventListener("change", (event) => {
+  state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
+  renderSchedule();
+});
+$("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
 $("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
   $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
+});
+$("#schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (!state.data.people.length) return toast("Aggiungi prima una persona.");
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/schedule/${id}` : "/api/schedule", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({
+        personId:Number(form.get("personId")),
+        trainer:form.get("trainer"),
+        date:state.scheduleDate,
+        time:form.get("time"),
+        notes:form.get("notes")
+      })
+    });
+    resetScheduleForm();
+    await load();
+    toast(id ? "Appuntamento aggiornato." : "Appuntamento aggiunto in agenda.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 $("#workout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -872,8 +1016,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v26")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v26", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v29")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v29", "1");
     window.location.reload();
   });
 }

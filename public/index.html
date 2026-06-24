@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=26">
+  <link rel="stylesheet" href="/style.css?v=29">
 </head>
 <body>
   <aside class="sidebar">
@@ -57,6 +57,37 @@
         <div class="hero-graphic"><div class="pulse">↗</div></div>
       </div>
       <div class="stats" id="stats"></div>
+      <section class="schedule-panel">
+        <div class="schedule-head">
+          <div><p class="eyebrow">AGENDA</p><h2>Calendario allenamenti</h2></div>
+          <label>Giorno
+            <input id="schedule-date" type="date">
+          </label>
+        </div>
+        <form id="schedule-form" class="schedule-form">
+          <input name="id" type="hidden">
+          <label>Persona
+            <select name="personId" id="schedule-person" required></select>
+          </label>
+          <label>Personal trainer
+            <select name="trainer" required>
+              <option value="">Seleziona</option>
+              <option>Leonardo</option><option>Michele</option><option>Giulia</option>
+            </select>
+          </label>
+          <label>Orario
+            <input name="time" type="time" required>
+          </label>
+          <label>Note
+            <input name="notes" placeholder="Es. recupero, obiettivo, sala">
+          </label>
+          <div class="schedule-actions">
+            <button class="secondary hidden" id="schedule-cancel-edit" type="button">Annulla</button>
+            <button class="primary" id="schedule-submit" type="submit">Aggiungi in agenda</button>
+          </div>
+        </form>
+        <div id="schedule-list" class="schedule-list"></div>
+      </section>
       <div class="section-head">
         <div><p class="eyebrow">ATTIVITA RECENTI</p><h2>Ultimi allenamenti</h2></div>
         <button class="text-button" data-go="history">Vedi tutti</button>
@@ -273,6 +304,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=26"></script>
+  <script src="/app.js?v=29"></script>
 </body>
 </html>

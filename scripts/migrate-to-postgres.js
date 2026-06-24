@@ -24,15 +24,19 @@ async function main() {
   await store.init();
   await store.close();
 
+  const hasTable = (name) => Boolean(sqlite.prepare("SELECT name FROM sqlite_schema WHERE type='table' AND name=?").get(name));
   const people = sqlite.prepare("SELECT * FROM people ORDER BY id").all();
   const workouts = sqlite.prepare("SELECT * FROM workouts ORDER BY id").all();
   const exercises = sqlite.prepare("SELECT * FROM exercises ORDER BY id").all();
   const catalog = sqlite.prepare("SELECT * FROM exercise_catalog ORDER BY id").all();
+  const schedule = hasTable("scheduled_sessions")
+    ? sqlite.prepare("SELECT * FROM scheduled_sessions ORDER BY id").all()
+    : [];
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
-    await client.query("TRUNCATE exercises, workouts, people, exercise_catalog RESTART IDENTITY CASCADE");
+    await client.query("TRUNCATE exercises, workouts, scheduled_sessions, people, exercise_catalog RESTART IDENTITY CASCADE");
 
     for (const item of people) {
       await client.query(`
@@ -66,14 +70,23 @@ async function main() {
         INSERT INTO exercise_catalog (id,body_area,name,created_at) VALUES ($1,$2,$3,$4)
       `, [item.id, item.body_area === "Schiena" ? "Dorso" : item.body_area, item.name, item.created_at]);
     }
+    for (const item of schedule) {
+      await client.query(`
+        INSERT INTO scheduled_sessions (id,person_id,scheduled_date,scheduled_time,trainer,notes,status,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `, [
+        item.id, item.person_id, item.scheduled_date, item.scheduled_time || "",
+        item.trainer || "", item.notes || "", item.status || "scheduled", item.created_at
+      ]);
+    }
 
-    for (const table of ["people", "workouts", "exercises", "exercise_catalog"]) {
+    for (const table of ["people", "workouts", "exercises", "exercise_catalog", "scheduled_sessions"]) {
       await client.query(`
         SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1), true)
       `, [table]);
     }
     await client.query("COMMIT");
-    console.log(`Migrazione completata: ${people.length} persone, ${workouts.length} allenamenti, ${exercises.length} esercizi.`);
+    console.log(`Migrazione completata: ${people.length} persone, ${workouts.length} allenamenti, ${exercises.length} esercizi, ${schedule.length} appuntamenti.`);
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;

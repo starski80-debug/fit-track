@@ -272,9 +272,9 @@ function groupWorkoutsByDay(workouts) {
 
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
-  const sessionActions = day.workouts.map((workout, index) => `
+  const sessionActions = day.workouts.map((workout) => `
     <button type="button" class="session-edit" data-edit-workout="${workout.id}">
-      Modifica ${day.workouts.length > 1 ? `sessione ${index + 1}` : "sessione"}
+      Modifica
     </button>
   `).join("");
   const phaseOrder = ["warmup", "main", "cooldown"];
@@ -747,8 +747,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v17")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v17", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v19")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v19", "1");
     window.location.reload();
   });
 }

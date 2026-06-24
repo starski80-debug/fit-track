@@ -42,6 +42,9 @@ test("le persone possono essere modificate", () => {
   const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
   assert.match(html, /person-dialog-title/);
   assert.match(html, /Data di nascita/);
+  assert.match(html, /people-search/);
+  assert.match(app, /data-open-person-history/);
+  assert.match(app, /state\.peopleSearch/);
   assert.match(app, /function openPerson/);
   assert.match(server, /req\.method === "PUT" && personMatch/);
 });
@@ -203,5 +206,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v7/);
+  assert.match(worker, /fittrack-shell-v8/);
 });

@@ -1,4 +1,4 @@
-const state = { data: null, view: "dashboard", historyPersonId: null };
+const state = { data: null, view: "dashboard", historyPersonId: null, peopleSearch: "" };
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -154,20 +154,29 @@ function render() {
   $("#recent-workouts").innerHTML = workouts.slice(0, 4).map(workoutCard).join("") ||
     `<div class="empty">Nessun allenamento registrato.</div>`;
   renderHistory();
-  $("#people-grid").innerHTML = people.map((person) => {
+  const peopleFilter = state.peopleSearch.trim().toLowerCase();
+  const visiblePeople = people.filter((person) => [
+    person.name,
+    person.birth_date,
+    person.height,
+    person.weight,
+    person.notes
+  ].some((value) => String(value || "").toLowerCase().includes(peopleFilter)));
+  $("#people-grid").innerHTML = visiblePeople.map((person) => {
     const personWorkouts = workouts.filter((item) => item.person_id === person.id);
     const details = [
       person.birth_date ? `Nato/a: ${formatDate(person.birth_date)}` : "",
       person.height ? `${person.height} cm` : "",
       person.weight ? `${person.weight} kg` : ""
     ].filter(Boolean);
-    return `<article class="person-card" data-edit-person="${person.id}" tabindex="0" role="button">
+    return `<article class="person-card" data-open-person-history="${person.id}" tabindex="0" role="button" aria-label="Apri allenamenti di ${escapeHtml(person.name)}">
       <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
       <h3>${escapeHtml(person.name)}</h3>
       <p>${personWorkouts.length} ${personWorkouts.length === 1 ? "allenamento" : "allenamenti"}</p>
       ${details.length ? `<div class="person-details">${details.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("")}</div>` : ""}
+      <button type="button" class="person-edit" data-edit-person="${person.id}">Modifica dati</button>
     </article>`;
-  }).join("");
+  }).join("") || `<div class="empty">Nessuna persona trovata.</div>`;
 
   const personOptions = people.map((person) =>
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
@@ -467,8 +476,15 @@ document.addEventListener("click", async (event) => {
     $("#catalog-custom-area-wrap").classList.add("hidden");
     $("#catalog-dialog").showModal();
   }
+  const personHistoryCard = event.target.closest("[data-open-person-history]");
+  if (personHistoryCard && !event.target.closest("[data-edit-person]")) {
+    state.historyPersonId = Number(personHistoryCard.dataset.openPersonHistory);
+    switchView("history");
+    renderHistory();
+  }
   const personCard = event.target.closest("[data-edit-person]");
   if (personCard) {
+    event.stopPropagation();
     const person = state.data.people.find((item) => item.id === Number(personCard.dataset.editPerson));
     if (person) openPerson(person);
   }
@@ -501,7 +517,7 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-edit-person]")) {
+  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-open-person-history]")) {
     event.preventDefault();
     event.target.click();
   }
@@ -515,6 +531,10 @@ document.addEventListener("change", (event) => {
 });
 
 $("#catalog-filter").addEventListener("change", renderCatalog);
+$("#people-search").addEventListener("input", (event) => {
+  state.peopleSearch = event.target.value;
+  render();
+});
 $("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
   $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
 });
@@ -727,8 +747,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v16")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v16", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v17")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v17", "1");
     window.location.reload();
   });
 }

@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=16">
+  <link rel="stylesheet" href="/style.css?v=17">
 </head>
 <body>
   <aside class="sidebar">
@@ -92,7 +92,12 @@
         <div><p class="eyebrow">ATLETI</p><h2>Le persone</h2></div>
         <button class="secondary" id="new-person">+ Aggiungi persona</button>
       </div>
-      <p class="section-help">Clicca su una persona per visualizzare e modificare i suoi dati.</p>
+      <p class="section-help">Clicca su una persona per aprire subito i suoi allenamenti. Usa "Modifica dati" per l'anagrafica.</p>
+      <div class="people-search">
+        <label>Cerca persone
+          <input id="people-search" type="search" placeholder="Cerca per nome, note o dati">
+        </label>
+      </div>
       <div id="people-grid" class="people-grid"></div>
     </section>
 
@@ -259,6 +264,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=16"></script>
+  <script src="/app.js?v=17"></script>
 </body>
 </html>

@@ -2,14 +2,19 @@ const state = { data: null, view: "dashboard", historyPersonId: null };
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
-const areas = { Petto:"PET", Schiena:"SCH", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
+const areas = { Petto:"PET", Dorso:"DOR", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
+const phaseLabels = { warmup:"Warm up", main:"Main part", cooldown:"Cool down" };
+const rpeLabels = {
+  1:"Rest", 2:"Really Easy", 3:"Easy", 4:"Moderate", 5:"Challenging",
+  6:"Hard", 7:"", 8:"Really Hard", 9:"Really, Really Hard", 10:"Maximal"
+};
 const defaultExerciseCatalog = {
   Petto: [
     "Panca piana con bilanciere", "Panca inclinata con bilanciere",
     "Panca piana con manubri", "Panca inclinata con manubri",
     "Chest press", "Croci con manubri", "Croci ai cavi", "Dip per il petto", "Piegamenti"
   ],
-  Schiena: [
+  Dorso: [
     "Trazioni alla sbarra", "Lat machine", "Pulley basso", "Rematore con bilanciere",
     "Rematore con manubrio", "Rematore alla macchina", "Stacco da terra",
     "Pullover ai cavi", "Iperestensioni"
@@ -41,6 +46,21 @@ const defaultExerciseCatalog = {
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({
   "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
 })[char]);
+
+function bodyAreaList() {
+  const names = new Set(Object.keys(defaultExerciseCatalog));
+  for (const item of state.data?.catalog || []) names.add(item.body_area);
+  for (const workout of state.data?.workouts || []) {
+    for (const exercise of workout.exercises || []) names.add(exercise.body_area);
+  }
+  return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "it"));
+}
+
+function fillAreaSelect(select, selected = "") {
+  const current = selected || select.value || "Petto";
+  select.innerHTML = bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+  select.value = bodyAreaList().includes(current) ? current : "Altro";
+}
 
 function toast(message) {
   const element = $("#toast");
@@ -107,6 +127,8 @@ function workoutCard(workout) {
       <div class="workout-meta">
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
+        ${workout.operator ? `<span>Operatore: ${escapeHtml(workout.operator)}</span>` : ""}
+        ${workout.rpe ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
       </div>
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
         `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} · ${escapeHtml(item.name)}</span>`
@@ -114,6 +136,7 @@ function workoutCard(workout) {
     </div>
     <div class="workout-side">
       <b>${workout.duration} min</b>
+      <button class="delete" data-edit-workout="${workout.id}">Modifica</button>
       <button class="delete" data-delete="${workout.id}">Elimina</button>
     </div>
   </article>`;
@@ -150,12 +173,16 @@ function render() {
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
   $("#person-select").innerHTML = personOptions;
+  $("#catalog-filter").innerHTML = [
+    `<option value="">Tutte le zone</option>`,
+    ...bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
+  ].join("");
   renderCatalog();
 }
 
 function renderCatalog() {
   const filter = $("#catalog-filter").value;
-  const bodyAreas = Object.keys(defaultExerciseCatalog).filter((area) => !filter || area === filter);
+  const bodyAreas = bodyAreaList().filter((area) => !filter || area === filter);
   $("#catalog-grid").innerHTML = bodyAreas.map((area) => {
     const items = (state.data.catalog || []).filter((item) => item.body_area === area);
     return `<section class="catalog-group">
@@ -192,23 +219,24 @@ function renderHistory() {
   const groupedDays = groupWorkoutsByDay(
     state.data.workouts.filter((workout) => workout.person_id === person.id)
   );
-  const totalVolume = groupedDays.reduce((sum, day) => sum + day.volume, 0);
+  const totalUnits = groupedDays.reduce((sum, day) => sum + day.units, 0);
   const totalSessions = groupedDays.reduce((sum, day) => sum + day.workouts.length, 0);
   const totalMinutes = groupedDays.reduce((sum, day) => sum + day.duration, 0);
-  const averageVolume = groupedDays.length ? Math.round(totalVolume / groupedDays.length) : 0;
+  const averageUnits = groupedDays.length ? Math.round(totalUnits / groupedDays.length) : 0;
   $("#history-summary").innerHTML = [
     ["Giorni allenati", groupedDays.length],
     ["Sessioni", totalSessions],
     ["Tempo totale", `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`],
-    ["Volume medio", `${formatNumber(averageVolume)} kg`]
+    ["Unita media", formatNumber(averageUnits)]
   ].map(([label, value]) => `<div class="history-stat"><span>${label}</span><b>${value}</b></div>`).join("");
   $("#progress-chart").innerHTML = progressChart(groupedDays);
   $("#history-days").innerHTML = groupedDays.map(dayCard).join("") ||
     `<div class="empty">Nessun allenamento registrato per ${escapeHtml(person.name)}.</div>`;
 }
 
-function exerciseVolume(exercise) {
-  return Number(exercise.sets || 0) * Number(exercise.reps || 0) * Number(exercise.weight || 0);
+function exerciseUnits(exercise) {
+  return Number(exercise.sets || 0) * Number(exercise.reps || 0) *
+    (Number(exercise.weight || 0) + Number(exercise.seconds || 0));
 }
 
 function formatNumber(value) {
@@ -220,7 +248,7 @@ function groupWorkoutsByDay(workouts) {
   for (const workout of workouts) {
     if (!groups.has(workout.workout_date)) {
       groups.set(workout.workout_date, {
-        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], volume:0
+        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], units:0
       });
     }
     const day = groups.get(workout.workout_date);
@@ -228,28 +256,37 @@ function groupWorkoutsByDay(workouts) {
     day.exercises.push(...workout.exercises);
     day.duration += Number(workout.duration || 0);
     if (workout.notes) day.notes.push(workout.notes);
-    day.volume += workout.exercises.reduce((sum, exercise) => sum + exerciseVolume(exercise), 0);
+    day.units += workout.exercises.reduce((sum, exercise) => sum + exerciseUnits(exercise), 0);
   }
   return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
-  return `<article class="day-card">
-    <div class="day-head">
-      <div><h3>${formatDate(day.date)}</h3><p>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"} · ${day.duration} minuti</p></div>
-      <div class="day-volume"><b>${formatNumber(day.volume)} kg</b><span>volume totale</span></div>
-    </div>
-    <div class="day-areas">${bodyAreas.map((area) => `<span class="tag area-tag" data-area="${escapeHtml(area)}">${escapeHtml(area)}</span>`).join("")}</div>
-    <div class="exercise-table">
-      <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso</span><span>Volume</span></div>
-      ${day.exercises.map((exercise) => `<div class="exercise-detail">
+  const phaseOrder = ["warmup", "main", "cooldown"];
+  const exerciseRows = phaseOrder.map((phase) => {
+    const exercises = day.exercises.filter((exercise) => (exercise.phase || "main") === phase);
+    if (!exercises.length) return "";
+    return `<div class="phase-group">
+      <h4>${phaseLabels[phase]}</h4>
+      ${exercises.map((exercise) => `<div class="exercise-detail">
         <strong>${escapeHtml(exercise.name)} <small class="tag area-tag" data-area="${escapeHtml(exercise.body_area)}">${escapeHtml(exercise.body_area)}</small></strong>
         <span>${exercise.sets} serie</span>
         <span>${exercise.reps} rip.</span>
-        <span>${formatNumber(exercise.weight)} kg</span>
-        <span class="exercise-volume">${formatNumber(exerciseVolume(exercise))} kg</span>
+        <span>${formatNumber(exercise.weight)} kg · ${Number(exercise.seconds || 0)} sec</span>
+        <span class="exercise-volume">${formatNumber(exerciseUnits(exercise))}</span>
       </div>`).join("")}
+    </div>`;
+  }).join("");
+  return `<article class="day-card">
+    <div class="day-head">
+      <div><h3>${formatDate(day.date)}</h3><p>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"} · ${day.duration} minuti</p></div>
+      <div class="day-volume"><b>${formatNumber(day.units)}</b><span>unita totale</span></div>
+    </div>
+    <div class="day-areas">${bodyAreas.map((area) => `<span class="tag area-tag" data-area="${escapeHtml(area)}">${escapeHtml(area)}</span>`).join("")}</div>
+    <div class="exercise-table">
+      <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso / sec</span><span>Unita</span></div>
+      ${exerciseRows}
     </div>
     ${day.notes.length ? `<div class="day-notes">${day.notes.map(escapeHtml).join(" · ")}</div>` : ""}
   </article>`;
@@ -263,11 +300,11 @@ function progressChart(days) {
   const padding = { left:45, right:20, top:25, bottom:38 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(...points.map((day) => day.volume), 1);
+  const maxValue = Math.max(...points.map((day) => day.units), 1);
   const coordinates = points.map((day, index) => ({
     ...day,
     x:padding.left + (points.length === 1 ? chartWidth / 2 : index * chartWidth / (points.length - 1)),
-    y:padding.top + chartHeight - (day.volume / maxValue) * chartHeight
+    y:padding.top + chartHeight - (day.units / maxValue) * chartHeight
   }));
   const line = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
   const area = `${coordinates[0].x},${padding.top + chartHeight} ${line} ${coordinates.at(-1).x},${padding.top + chartHeight}`;
@@ -283,9 +320,9 @@ function progressChart(days) {
     return `<text class="chart-label" x="${point.x}" y="${height - 12}" text-anchor="middle">${label}</text>`;
   }).join("");
   const dots = coordinates.map((point) => `<circle class="chart-dot" cx="${point.x}" cy="${point.y}" r="5">
-    <title>${formatDate(point.date)}: ${formatNumber(point.volume)} kg</title>
+    <title>${formatDate(point.date)}: ${formatNumber(point.units)} unita</title>
   </circle>`).join("");
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico del volume sollevato">
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico delle unita di allenamento">
     <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6c63ff" stop-opacity=".24"/><stop offset="100%" stop-color="#6c63ff" stop-opacity=".02"/></linearGradient></defs>
     ${grid}<polygon class="chart-area" points="${area}"/><polyline class="chart-line" points="${line}"/>${dots}${dateLabels}
   </svg>`;
@@ -293,6 +330,17 @@ function progressChart(days) {
 
 async function load() {
   state.data = await request("/api/dashboard");
+  for (const item of state.data.catalog || []) {
+    if (item.body_area === "Schiena") item.body_area = "Dorso";
+  }
+  for (const workout of state.data.workouts || []) {
+    workout.operator = workout.operator || workout.trainer || "";
+    for (const exercise of workout.exercises || []) {
+      if (exercise.body_area === "Schiena") exercise.body_area = "Dorso";
+      exercise.phase = exercise.phase || "main";
+      exercise.seconds = Number(exercise.seconds || 0);
+    }
+  }
   if (!Array.isArray(state.data.catalog)) {
     state.data.catalog = Object.entries(defaultExerciseCatalog).flatMap(([bodyArea, names]) =>
       names.map((name, index) => ({ id:`default-${bodyArea}-${index}`, body_area:bodyArea, name }))
@@ -315,11 +363,13 @@ function switchView(view) {
 
 function addExercise(defaults = {}) {
   const row = $("#exercise-template").content.firstElementChild.cloneNode(true);
-  $(".body-area", row).value = defaults.bodyArea || "Petto";
+  fillAreaSelect($(".body-area", row), defaults.bodyArea || "Petto");
+  $(".phase", row).value = defaults.phase || "main";
   updateExerciseOptions(row, defaults.name);
   $(".sets", row).value = defaults.sets || "";
   $(".reps", row).value = defaults.reps || "";
   $(".weight", row).value = defaults.weight || "";
+  $(".seconds", row).value = String(defaults.seconds || 0);
   $("#exercise-list").append(row);
 }
 
@@ -349,13 +399,30 @@ function toggleCustomExercise(row) {
   if (isCustom) input.focus();
 }
 
-function openWorkout() {
+function openWorkout(workout = null) {
   if (!state.data) return toast("Attendi il caricamento dei dati.");
   if (!state.data.people.length) return toast("Aggiungi prima una persona.");
-  $("#workout-form").reset();
-  $("#workout-form [name=date]").value = new Date().toISOString().slice(0, 10);
+  const form = $("#workout-form");
+  form.reset();
+  form.elements.id.value = workout?.id || "";
+  form.elements.personId.value = workout?.person_id || state.data.people[0]?.id || "";
+  form.elements.date.value = workout?.workout_date || new Date().toISOString().slice(0, 10);
+  form.elements.duration.value = workout?.duration || 45;
+  form.elements.operator.value = workout?.operator || workout?.trainer || "";
+  form.elements.rpe.value = workout?.rpe || 0;
   $("#exercise-list").innerHTML = "";
-  addExercise({ sets:3, reps:10 });
+  const exercises = workout?.exercises?.length ? workout.exercises : [{ sets:3, reps:10, phase:"main" }];
+  for (const exercise of exercises) {
+    addExercise({
+      bodyArea:exercise.body_area || exercise.bodyArea,
+      phase:exercise.phase,
+      name:exercise.name,
+      sets:exercise.sets,
+      reps:exercise.reps,
+      weight:exercise.weight,
+      seconds:exercise.seconds
+    });
+  }
   $("#workout-dialog").showModal();
 }
 
@@ -390,6 +457,8 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("#new-person")) openPerson();
   if (event.target.closest("#new-catalog-exercise")) {
     if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
+    $("#catalog-form").reset();
+    $("#catalog-custom-area-wrap").classList.add("hidden");
     $("#catalog-dialog").showModal();
   }
   const personCard = event.target.closest("[data-edit-person]");
@@ -398,10 +467,15 @@ document.addEventListener("click", async (event) => {
     if (person) openPerson(person);
   }
   if (event.target.matches(".close")) event.target.closest("dialog").close();
-  if (event.target.matches("#add-exercise")) addExercise({ sets:3, reps:10 });
+  if (event.target.matches("#add-exercise")) addExercise({ sets:3, reps:10, phase:"main" });
   if (event.target.matches(".remove-exercise")) {
     if ($$(".exercise-row").length > 1) event.target.closest(".exercise-row").remove();
     else toast("Serve almeno un esercizio.");
+  }
+  const editWorkoutButton = event.target.closest("[data-edit-workout]");
+  if (editWorkoutButton) {
+    const workout = state.data.workouts.find((item) => item.id === Number(editWorkoutButton.dataset.editWorkout));
+    if (workout) openWorkout(workout);
   }
   const deleteButton = event.target.closest("[data-delete]");
   if (deleteButton && confirm("Eliminare questo allenamento?")) {
@@ -435,6 +509,9 @@ document.addEventListener("change", (event) => {
 });
 
 $("#catalog-filter").addEventListener("change", renderCatalog);
+$("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
+  $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
+});
 $("#workout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -443,25 +520,29 @@ $("#workout-form").addEventListener("submit", async (event) => {
   setFormBusy(formElement, true);
   const form = new FormData(formElement);
   const exercises = $$(".exercise-row").map((row) => ({
+    phase: $(".phase", row).value,
     bodyArea: $(".body-area", row).value,
     name: $(".exercise-name", row).value === "__custom__"
       ? $(".custom-exercise", row).value
       : $(".exercise-name", row).value,
     sets: $(".sets", row).value,
     reps: $(".reps", row).value,
-    weight: $(".weight", row).value
+    weight: $(".weight", row).value,
+    seconds: $(".seconds", row).value
   }));
   try {
-    await request("/api/workouts", {
-      method:"POST",
+    const id = form.get("id");
+    await request(id ? `/api/workouts/${id}` : "/api/workouts", {
+      method:id ? "PUT" : "POST",
       body:JSON.stringify({
         personId:Number(form.get("personId")), date:form.get("date"),
-        duration:Number(form.get("duration")), notes:form.get("notes"), exercises
+        duration:Number(form.get("duration")), operator:form.get("operator"),
+        rpe:Number(form.get("rpe")), notes:"", exercises
       })
     });
     $("#workout-dialog").close();
     await load();
-    toast("Allenamento salvato!");
+    toast(id ? "Allenamento aggiornato!" : "Allenamento salvato!");
   } catch (error) {
     toast(error.message);
   } finally {
@@ -518,13 +599,17 @@ $("#catalog-form").addEventListener("submit", async (event) => {
   formElement.dataset.busy = "true";
   setFormBusy(formElement, true);
   const form = new FormData(formElement);
+  const bodyArea = form.get("bodyArea") === "__custom__"
+    ? form.get("customBodyArea")
+    : form.get("bodyArea");
   try {
     await request("/api/catalog", {
       method:"POST",
-      body:JSON.stringify({ bodyArea:form.get("bodyArea"), name:form.get("name") })
+      body:JSON.stringify({ bodyArea, name:form.get("name") })
     });
     $("#catalog-dialog").close();
     formElement.reset();
+    $("#catalog-custom-area-wrap").classList.add("hidden");
     await load();
     switchView("catalog");
     toast("Esercizio aggiunto al catalogo!");
@@ -636,8 +721,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v14")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v14", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v15")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v15", "1");
     window.location.reload();
   });
 }

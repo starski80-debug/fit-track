@@ -1,5 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#6657e8"/>
-  <circle cx="400" cy="98" r="92" fill="#8276f2" opacity=".55"/>
-  <path fill="#fff" d="M151 120h230v72H237v76h123v70H237v118h-86z"/>
-</svg>
+@echo off
+cd /d "%~dp0"
+set "NODE=node"
+where node >nul 2>nul
+if errorlevel 1 set "NODE=%USERPROFILE%\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe"
+if not exist "%NODE%" (
+  echo Node.js non e installato.
+  echo Scaricalo da https://nodejs.org e riprova.
+  pause
+  exit /b 1
+)
+start "" http://localhost:3000
+"%NODE%" server.js
+pause

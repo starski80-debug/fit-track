@@ -45,20 +45,26 @@ async function main() {
     }
     for (const item of workouts) {
       await client.query(`
-        INSERT INTO workouts (id,person_id,workout_date,duration,notes,created_at)
-        VALUES ($1,$2,$3,$4,$5,$6)
-      `, [item.id, item.person_id, item.workout_date, item.duration, item.notes, item.created_at]);
+        INSERT INTO workouts (id,person_id,workout_date,duration,notes,rpe,trainer,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `, [
+        item.id, item.person_id, item.workout_date, item.duration, item.notes || "",
+        item.rpe || 0, item.trainer || item.operator || "", item.created_at
+      ]);
     }
     for (const item of exercises) {
       await client.query(`
-        INSERT INTO exercises (id,workout_id,body_area,name,sets,reps,weight)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)
-      `, [item.id, item.workout_id, item.body_area, item.name, item.sets, item.reps, item.weight]);
+        INSERT INTO exercises (id,workout_id,body_area,name,sets,reps,weight,seconds,phase)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      `, [
+        item.id, item.workout_id, item.body_area === "Schiena" ? "Dorso" : item.body_area,
+        item.name, item.sets, item.reps, item.weight, item.seconds || 0, item.phase || "main"
+      ]);
     }
     for (const item of catalog) {
       await client.query(`
         INSERT INTO exercise_catalog (id,body_area,name,created_at) VALUES ($1,$2,$3,$4)
-      `, [item.id, item.body_area, item.name, item.created_at]);
+      `, [item.id, item.body_area === "Schiena" ? "Dorso" : item.body_area, item.name, item.created_at]);
     }
 
     for (const table of ["people", "workouts", "exercises", "exercise_catalog"]) {

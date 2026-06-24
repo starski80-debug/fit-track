@@ -87,6 +87,8 @@ h2 { margin-bottom:0; }
 .day-volume { text-align:right; }
 .day-volume b { display:block; font-size:17px; }
 .day-volume span { color:var(--muted); font-size:11px; }
+.day-actions { display:flex; flex-wrap:wrap; gap:8px; padding:12px 20px 0; }
+.session-edit { border:0; border-radius:10px; background:var(--accent-soft); color:var(--accent-strong); padding:9px 12px; font-size:12px; font-weight:800; }
 .day-areas { display:flex; flex-wrap:wrap; gap:6px; padding:14px 20px 0; }
 .exercise-table { padding:10px 20px 18px; }
 .exercise-detail { display:grid; grid-template-columns:minmax(150px,1.7fr) 1fr 1fr 1fr 1.2fr; gap:10px; align-items:center; padding:11px 0; border-bottom:1px solid #eeeeF4; }
@@ -671,6 +673,8 @@ dialog form { padding:30px; }
   .day-volume { flex:0 0 auto; }
   .day-volume b { font-size:15px; }
   .day-volume span { font-size:9px; }
+  .day-actions { padding:11px 14px 0; }
+  .session-edit { width:100%; min-height:42px; }
   .day-areas {
     flex-wrap:nowrap;
     overflow-x:auto;

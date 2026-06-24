@@ -263,6 +263,11 @@ function groupWorkoutsByDay(workouts) {
 
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
+  const sessionActions = day.workouts.map((workout, index) => `
+    <button type="button" class="session-edit" data-edit-workout="${workout.id}">
+      Modifica ${day.workouts.length > 1 ? `sessione ${index + 1}` : "sessione"}
+    </button>
+  `).join("");
   const phaseOrder = ["warmup", "main", "cooldown"];
   const exerciseRows = phaseOrder.map((phase) => {
     const exercises = day.exercises.filter((exercise) => (exercise.phase || "main") === phase);
@@ -283,6 +288,7 @@ function dayCard(day) {
       <div><h3>${formatDate(day.date)}</h3><p>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"} · ${day.duration} minuti</p></div>
       <div class="day-volume"><b>${formatNumber(day.units)}</b><span>unita totale</span></div>
     </div>
+    <div class="day-actions">${sessionActions}</div>
     <div class="day-areas">${bodyAreas.map((area) => `<span class="tag area-tag" data-area="${escapeHtml(area)}">${escapeHtml(area)}</span>`).join("")}</div>
     <div class="exercise-table">
       <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso / sec</span><span>Unita</span></div>
@@ -721,8 +727,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v15")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v15", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v16")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v16", "1");
     window.location.reload();
   });
 }

@@ -234,8 +234,6 @@ function render() {
     ["Persone", stats.people]
   ].map(([label,value]) => `<div class="stat"><span>${label}</span><b>${value}</b></div>`).join("");
 
-  $("#recent-workouts").innerHTML = workouts.slice(0, 4).map(workoutCard).join("") ||
-    `<div class="empty">Nessun allenamento registrato.</div>`;
   renderSchedule();
   renderHistory();
   const peopleFilter = state.peopleSearch.trim().toLowerCase();
@@ -645,7 +643,7 @@ document.addEventListener("click", async (event) => {
     state.historyPersonId = null;
     renderHistory();
   }
-  if (event.target.closest("#new-workout,#mobile-new")) openWorkout();
+  if (event.target.closest("#dashboard-new-workout")) openWorkout();
   if (event.target.closest("#new-person")) openPerson();
   if (event.target.closest("#new-catalog-exercise")) {
     if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
@@ -1016,8 +1014,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v29")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v29", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v30")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v30", "1");
     window.location.reload();
   });
 }

@@ -149,6 +149,35 @@ function createSqliteStore() {
         throw error;
       }
     },
+    async updateWorkoutGroup(ids, body) {
+      const targetId = Number(ids[0]);
+      db.exec("BEGIN");
+      try {
+        const placeholders = ids.map(() => "?").join(",");
+        const existing = db.prepare(`SELECT id FROM workouts WHERE id IN (${placeholders}) ORDER BY id`).all(...ids);
+        if (!existing.length) {
+          db.exec("ROLLBACK");
+          return false;
+        }
+        db.prepare(`
+          UPDATE workouts SET person_id=?, workout_date=?, duration=?, notes=?, rpe=?, trainer=? WHERE id=?
+        `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, targetId);
+        db.prepare("DELETE FROM exercises WHERE workout_id=?").run(targetId);
+        const insert = db.prepare(`
+          INSERT INTO exercises (workout_id, body_area, name, sets, reps, weight, seconds, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const item of body.exercises) insert.run(targetId, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase);
+        const extraIds = ids.filter((id) => Number(id) !== targetId);
+        if (extraIds.length) {
+          db.prepare(`DELETE FROM workouts WHERE id IN (${extraIds.map(() => "?").join(",")})`).run(...extraIds);
+        }
+        db.exec("COMMIT");
+        return true;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    },
     async deleteWorkout(id) { return db.prepare("DELETE FROM workouts WHERE id=?").run(id).changes > 0; }
   };
 }
@@ -325,6 +354,36 @@ function createPostgresStore() {
             INSERT INTO exercises (workout_id,body_area,name,sets,reps,weight,seconds,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
           `, [id, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase]);
         }
+        await client.query("COMMIT");
+        return true;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
+    async updateWorkoutGroup(ids, body) {
+      const targetId = Number(ids[0]);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const existing = await client.query("SELECT id FROM workouts WHERE id = ANY($1::bigint[]) ORDER BY id", [ids]);
+        if (!existing.rowCount) {
+          await client.query("ROLLBACK");
+          return false;
+        }
+        await client.query(`
+          UPDATE workouts SET person_id=$1,workout_date=$2,duration=$3,notes=$4,rpe=$5,trainer=$6 WHERE id=$7
+        `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, targetId]);
+        await client.query("DELETE FROM exercises WHERE workout_id=$1", [targetId]);
+        for (const item of body.exercises) {
+          await client.query(`
+            INSERT INTO exercises (workout_id,body_area,name,sets,reps,weight,seconds,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          `, [targetId, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase]);
+        }
+        const extraIds = ids.filter((id) => Number(id) !== targetId);
+        if (extraIds.length) await client.query("DELETE FROM workouts WHERE id = ANY($1::bigint[])", [extraIds]);
         await client.query("COMMIT");
         return true;
       } catch (error) {

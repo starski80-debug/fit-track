@@ -121,9 +121,9 @@ function workoutCard(workout) {
   const bodyAreas = [...new Set(workout.exercises.map((item) => item.body_area))];
   const exerciseCount = workout.exercises.length;
   return `<article class="workout-card">
-    <div class="avatar" style="background:${escapeHtml(workout.person_color)}">${escapeHtml(workout.person_name[0])}</div>
+    <button type="button" class="avatar avatar-button" data-open-person-history="${workout.person_id}" style="background:${escapeHtml(workout.person_color)}" aria-label="Apri allenamenti di ${escapeHtml(workout.person_name)}">${escapeHtml(workout.person_name[0])}</button>
     <div class="workout-main">
-      <h3>${escapeHtml(workout.person_name)} · ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
+      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> · ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
       <div class="workout-meta">
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
@@ -272,11 +272,12 @@ function groupWorkoutsByDay(workouts) {
 
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
-  const sessionActions = day.workouts.map((workout) => `
-    <button type="button" class="session-edit" data-edit-workout="${workout.id}">
+  const groupIds = day.workouts.map((workout) => workout.id).join(",");
+  const sessionActions = groupIds ? `
+    <button type="button" class="session-edit" data-edit-workout-group="${escapeHtml(groupIds)}">
       Modifica
     </button>
-  `).join("");
+  ` : "";
   const phaseOrder = ["warmup", "main", "cooldown"];
   const exerciseRows = phaseOrder.map((phase) => {
     const exercises = day.exercises.filter((exercise) => (exercise.phase || "main") === phase);
@@ -420,6 +421,7 @@ function openWorkout(workout = null) {
   const form = $("#workout-form");
   form.reset();
   form.elements.id.value = workout?.id || "";
+  form.elements.groupIds.value = "";
   form.elements.personId.value = workout?.person_id || state.data.people[0]?.id || "";
   form.elements.date.value = workout?.workout_date || new Date().toISOString().slice(0, 10);
   form.elements.duration.value = workout?.duration || 45;
@@ -439,6 +441,22 @@ function openWorkout(workout = null) {
     });
   }
   $("#workout-dialog").showModal();
+}
+
+function openWorkoutGroup(workoutIds) {
+  const workouts = workoutIds
+    .map((id) => state.data.workouts.find((item) => item.id === Number(id)))
+    .filter(Boolean);
+  if (!workouts.length) return toast("Allenamento non trovato.");
+  const first = workouts[0];
+  openWorkout({
+    ...first,
+    duration:workouts.reduce((sum, workout) => sum + Number(workout.duration || 0), 0),
+    rpe:workouts.find((workout) => Number(workout.rpe || 0))?.rpe || first.rpe || 0,
+    operator:workouts.find((workout) => workout.operator || workout.trainer)?.operator || first.operator || first.trainer || "",
+    exercises:workouts.flatMap((workout) => workout.exercises || [])
+  });
+  $("#workout-form").elements.groupIds.value = workoutIds.join(",");
 }
 
 function openPerson(person = null) {
@@ -499,6 +517,10 @@ document.addEventListener("click", async (event) => {
     const workout = state.data.workouts.find((item) => item.id === Number(editWorkoutButton.dataset.editWorkout));
     if (workout) openWorkout(workout);
   }
+  const editWorkoutGroupButton = event.target.closest("[data-edit-workout-group]");
+  if (editWorkoutGroupButton) {
+    openWorkoutGroup(editWorkoutGroupButton.dataset.editWorkoutGroup.split(",").map(Number));
+  }
   const deleteButton = event.target.closest("[data-delete]");
   if (deleteButton && confirm("Eliminare questo allenamento?")) {
     await request(`/api/workouts/${deleteButton.dataset.delete}`, { method:"DELETE" });
@@ -558,12 +580,15 @@ $("#workout-form").addEventListener("submit", async (event) => {
   }));
   try {
     const id = form.get("id");
-    await request(id ? `/api/workouts/${id}` : "/api/workouts", {
-      method:id ? "PUT" : "POST",
+    const groupIds = String(form.get("groupIds") || "").split(",").map((item) => Number(item)).filter(Boolean);
+    const url = groupIds.length ? "/api/workout-groups" : id ? `/api/workouts/${id}` : "/api/workouts";
+    const method = groupIds.length || id ? "PUT" : "POST";
+    await request(url, {
+      method,
       body:JSON.stringify({
         personId:Number(form.get("personId")), date:form.get("date"),
         duration:Number(form.get("duration")), operator:form.get("operator"),
-        rpe:Number(form.get("rpe")), notes:"", exercises
+        rpe:Number(form.get("rpe")), notes:"", workoutIds:groupIds, exercises
       })
     });
     $("#workout-dialog").close();
@@ -747,8 +772,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v19")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v19", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v20")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v20", "1");
     window.location.reload();
   });
 }

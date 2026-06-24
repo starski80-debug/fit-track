@@ -144,6 +144,13 @@ function normalizeWorkout(body) {
   };
 }
 
+function normalizeWorkoutIds(value) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map(positiveInteger)
+    .filter(Boolean))]
+    .slice(0, 20);
+}
+
 function clientAddress(req) {
   return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
 }
@@ -264,6 +271,18 @@ async function api(req, res, url) {
       return json(res, 400, { error:"Completa persona, data e almeno un esercizio." });
     }
     return json(res, 201, { id:await store.addWorkout(body) });
+  }
+  if (req.method === "PUT" && url.pathname === "/api/workout-groups") {
+    const raw = await readBody(req);
+    const ids = normalizeWorkoutIds(raw.workoutIds);
+    const body = normalizeWorkout(raw);
+    if (!ids.length || !body.personId || !body.date || !body.exercises.length) {
+      return json(res, 400, { error:"Completa persona, data e almeno un esercizio." });
+    }
+    if (!await store.updateWorkoutGroup(ids, body)) {
+      return json(res, 404, { error:"Allenamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
   }
   const workoutMatch = url.pathname.match(/^\/api\/workouts\/(\d+)$/);
   if (req.method === "PUT" && workoutMatch) {

@@ -44,6 +44,7 @@ test("le persone possono essere modificate", () => {
   assert.match(html, /Data di nascita/);
   assert.match(html, /people-search/);
   assert.match(app, /data-open-person-history/);
+  assert.match(app, /person-link/);
   assert.match(app, /state\.peopleSearch/);
   assert.match(app, /function openPerson/);
   assert.match(server, /req\.method === "PUT" && personMatch/);
@@ -69,7 +70,9 @@ test("gli allenamenti supportano modifica, RPE, operatore, fasi e secondi", () =
   assert.match(html, /Warm up/);
   assert.match(html, /class="seconds"/);
   assert.match(app, /data-edit-workout/);
-  assert.match(app, /method:id \? "PUT" : "POST"/);
+  assert.match(app, /data-edit-workout-group/);
+  assert.match(server, /\/api\/workout-groups/);
+  assert.match(app, /const method = groupIds\.length \|\| id \? "PUT" : "POST"/);
   assert.match(server, /req\.method === "PUT" && workoutMatch/);
   assert.match(database, /ALTER TABLE workouts ADD COLUMN/);
   assert.match(database, /seconds INTEGER NOT NULL DEFAULT 0/);
@@ -206,5 +209,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v10/);
+  assert.match(worker, /fittrack-shell-v11/);
 });

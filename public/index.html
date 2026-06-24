@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=19">
+  <link rel="stylesheet" href="/style.css?v=20">
 </head>
 <body>
   <aside class="sidebar">
@@ -131,6 +131,7 @@
   <dialog id="workout-dialog">
     <form id="workout-form">
       <input name="id" type="hidden">
+      <input name="groupIds" type="hidden">
       <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">×</button></div>
       <div class="form-grid">
         <label>Persona<select name="personId" id="person-select" required></select></label>
@@ -264,6 +265,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=19"></script>
+  <script src="/app.js?v=20"></script>
 </body>
 </html>

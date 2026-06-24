@@ -4,6 +4,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const areas = { Petto:"PET", Dorso:"DOR", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
 const phaseLabels = { warmup:"Warm up", main:"Main part", cooldown:"Cool down" };
+const formaeLogoUrl = `${window.location.origin}/brand/formae-mark.png`;
 const rpeLabels = {
   0:"Rest", 1:"Very Easy", 2:"Easy", 3:"Comfortable", 4:"Moderate", 5:"Challenging",
   6:"Sort of Hard", 7:"Hard", 8:"Really Hard", 9:"Extremely Hard", 10:"Maximum Effort"
@@ -143,8 +144,16 @@ function workoutCard(workout) {
   </article>`;
 }
 
+function formaeWhatsappSignature() {
+  return `\n\nFormae - La tua forza, il tuo potenziale\nLogo: ${formaeLogoUrl}`;
+}
+
+function scheduleReminderText(item) {
+  return `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!${formaeWhatsappSignature()}`;
+}
+
 function scheduleCard(item) {
-  const reminderText = `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!`;
+  const reminderText = scheduleReminderText(item);
   return `<article class="schedule-item">
     <div class="schedule-time">${escapeHtml(item.scheduled_time || "--:--")}</div>
     <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
@@ -717,7 +726,7 @@ document.addEventListener("click", async (event) => {
   if (scheduleReminderButton) {
     const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleReminderButton.dataset.scheduleReminder));
     if (item) {
-      const text = `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!`;
+      const text = scheduleReminderText(item);
       const url = whatsappReminderUrl(item, text);
       if (!url) return toast("Inserisci il telefono WhatsApp nella scheda della persona.");
       window.open(url, "_blank", "noopener");
@@ -1020,8 +1029,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v31")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v31", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v33")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v33", "1");
     window.location.reload();
   });
 }

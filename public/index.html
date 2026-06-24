@@ -12,11 +12,11 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=31">
+  <link rel="stylesheet" href="/style.css?v=33">
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="#"><span class="brand-mark">F</span><span>FitTrack</span></a>
+    <a class="brand" href="#"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></a>
     <nav>
       <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panoramica</button>
       <button class="nav-item" data-view="history"><span>◷</span> Storico</button>
@@ -45,7 +45,8 @@
     </header>
 
     <section id="dashboard-view" class="view">
-      <div class="hero">
+      <div class="hero brand-hero" aria-label="Formae - La tua forza, il tuo potenziale">
+        <img class="hero-logo" src="/brand/formae-banner.png" alt="Formae - La tua forza, il tuo potenziale">
         <div>
           <span class="pill">IL TUO RITMO</span>
           <h2>Ogni allenamento<br>conta.</h2>
@@ -272,7 +273,7 @@
 
   <dialog id="login-dialog" class="login-dialog">
     <form id="login-form">
-      <div class="login-brand"><span class="brand-mark">F</span><span>FitTrack</span></div>
+      <div class="login-brand"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></div>
       <p class="eyebrow">AREA PERSONALE</p>
       <h2>Accedi ai tuoi allenamenti</h2>
       <p class="login-copy">Inserisci la password configurata su Railway.</p>
@@ -331,6 +332,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=31"></script>
+  <script src="/app.js?v=33"></script>
 </body>
 </html>

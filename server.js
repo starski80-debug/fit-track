@@ -199,6 +199,14 @@ function publicBaseUrl(req) {
   return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
 }
 
+function formaeLogoUrl(req) {
+  return `${publicBaseUrl(req)}/brand/formae-mark.png`;
+}
+
+function formaeWhatsappSignature(req) {
+  return `\n\nFormae - La tua forza, il tuo potenziale\nLogo: ${formaeLogoUrl(req)}`;
+}
+
 function whatsappNumber(value) {
   return String(value || "").replace(/[^\d]/g, "");
 }
@@ -439,7 +447,7 @@ async function api(req, res, url) {
     const phone = whatsappNumber(workout.person_phone);
     if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
     const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
-    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature(req)}`;
     return json(res, 200, {
       ok:true,
       url:rpeUrl,
@@ -458,7 +466,7 @@ async function api(req, res, url) {
     const phone = whatsappNumber(workout.person_phone);
     if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
     const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
-    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature(req)}`;
     return json(res, 200, {
       ok:true,
       url:rpeUrl,

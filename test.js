@@ -68,9 +68,12 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   assert.match(app, /data-rpe-whatsapp-group/);
   assert.match(app, /\/api\/workout-groups\/rpe-link/);
   assert.match(app, /whatsappUrl/);
+  assert.match(app, /function formaeWhatsappSignature/);
   assert.match(server, /rpeLinkMatch/);
   assert.match(server, /rpe-link/);
   assert.match(server, /\/api\/workout-groups\/rpe-link/);
+  assert.match(server, /function formaeWhatsappSignature/);
+  assert.match(server, /brand\/formae-mark\.png/);
   assert.match(server, /\/api\/rpe\//);
   assert.match(server, /prepareRpeGroupLink/);
   assert.match(server, /https:\/\/wa\.me/);
@@ -97,6 +100,8 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(app, /Promemoria di domani/);
   assert.match(app, /data-schedule-reminder/);
   assert.match(app, /function whatsappReminderUrl/);
+  assert.match(app, /function scheduleReminderText/);
+  assert.match(app, /brand\/formae-mark\.png/);
   assert.match(app, /wa\.me/);
   assert.match(app, /function openScheduleEdit/);
   assert.match(app, /data-edit-schedule/);
@@ -120,6 +125,8 @@ test("lo storico raggruppa per giorno e mostra il grafico", () => {
   assert.match(html, /rpe-progress-chart/);
   assert.match(html, /Sforzo percepito nel tempo/);
   assert.match(html, /history-days/);
+  assert.match(html, /brand\/formae-banner\.png/);
+  assert.match(html, /brand\/formae-mark\.png/);
   assert.match(app, /function groupWorkoutsByDay/);
   assert.match(app, /function progressChart/);
   assert.match(app, /function rpeTrendChart/);
@@ -285,5 +292,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v22/);
+  assert.match(worker, /fittrack-shell-v24/);
+  assert.match(worker, /brand\/formae-banner\.png/);
+  assert.match(worker, /brand\/formae-mark\.png/);
 });

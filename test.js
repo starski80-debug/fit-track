@@ -64,6 +64,7 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   assert.match(server, /\/api\/rpe\//);
   assert.match(server, /https:\/\/wa\.me/);
   assert.match(server, /function rpeHtml/);
+  assert.match(server, /workout\.rpe_token \|\| token/);
   assert.match(server, /Maximum Effort/);
   assert.match(server, /0, "Rest"/);
   assert.match(database, /phone TEXT NOT NULL DEFAULT ''/);
@@ -148,6 +149,7 @@ test("la PWA include manifest, icone e cache senza dati API", () => {
   assert.match(app, /serviceWorker\.register/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(worker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/rpe\/"\)/);
   assert.doesNotMatch(worker, /\/api\/dashboard/);
 });
 
@@ -229,5 +231,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v13/);
+  assert.match(worker, /fittrack-shell-v14/);
 });

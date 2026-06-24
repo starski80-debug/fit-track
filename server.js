@@ -403,7 +403,7 @@ async function api(req, res, url) {
     if (!workout) return json(res, 404, { error:"Allenamento non trovato." });
     const phone = whatsappNumber(workout.person_phone);
     if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
-    const rpeUrl = `${publicBaseUrl(req)}/rpe/${token}`;
+    const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
     const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}`;
     return json(res, 200, {
       ok:true,

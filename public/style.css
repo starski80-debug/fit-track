@@ -35,6 +35,15 @@ h2 { margin-bottom:0; }
 .stat { background:var(--surface); border:1px solid var(--line); border-radius:17px; padding:20px; }
 .stat b { display:block; font-size:25px; font-weight:800; margin-top:4px; }
 .stat span { color:var(--muted); font-size:12px; }
+.home-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; margin:0 0 28px; }
+.home-tab { min-height:138px; border:1px solid var(--line); border-radius:20px; background:var(--surface); color:var(--ink); padding:20px; text-align:left; box-shadow:0 6px 22px rgba(31,40,67,.04); }
+.home-tab:hover { border-color:#cbc6f8; box-shadow:0 12px 30px rgba(31,40,67,.08); transform:translateY(-1px); }
+.home-tab span { display:inline-flex; margin-bottom:18px; border-radius:999px; background:var(--accent-soft,#ecebfd); color:var(--accent-strong,var(--accent)); padding:7px 10px; font-size:12px; font-weight:900; }
+.home-tab strong { display:block; margin-bottom:8px; font-size:20px; }
+.home-tab small { display:block; color:var(--muted); font-size:13px; line-height:1.45; }
+.home-tab-primary { background:linear-gradient(145deg,#6c63ff,#5147df); color:#fff; border-color:transparent; }
+.home-tab-primary span { background:#ffffff22; color:#fff; }
+.home-tab-primary small { color:#e1e3ff; }
 .schedule-panel { background:var(--surface); border:1px solid var(--line); border-radius:22px; padding:22px; margin:0 0 34px; box-shadow:0 6px 22px rgba(31,40,67,.04); }
 .schedule-head { display:flex; align-items:end; justify-content:space-between; gap:18px; margin-bottom:17px; }
 .schedule-head h2 { font-size:23px; }
@@ -531,6 +540,7 @@ dialog form { padding:30px; }
 [data-theme="dark"] .area-tag[data-area="Addome"] { background:#443b1d; color:#e9cd72; }
 [data-theme="dark"] .area-tag[data-area="Cardio"] { background:#44263a; color:#f09acb; }
 [data-theme="dark"] .area-tag[data-area="Altro"] { background:#2b3340; color:#c0c7d2; }
+[data-theme="dark"] .home-tab { border-color:var(--line); }
 [data-theme="dark"] .day-meta span { background:#252d44; color:#dbe1ff; border-color:#38425c; }
 [data-theme="dark"] .day-meta .rpe-chip { background:#18382b; color:#8ee0b8; border-color:#27543f; }
 [data-theme="dark"] .schedule-reminders { background:#12261f; border-color:#27543f; }
@@ -553,6 +563,8 @@ dialog form { padding:30px; }
   .install-app { min-height:40px; padding:8px 10px; }
   .hero { min-height:225px; padding:30px; border-radius:22px; }
   .hero h2 { font-size:34px; }
+  .home-tabs { grid-template-columns:1fr; }
+  .home-tab { min-height:118px; }
   .schedule-form { grid-template-columns:1fr 1fr; }
   .schedule-actions { grid-column:1 / -1; }
   .schedule-list { grid-template-columns:1fr; }
@@ -634,6 +646,11 @@ dialog form { padding:30px; }
   .stat { min-height:88px; padding:15px 14px; }
   .stat span { font-size:9px; line-height:1.3; }
   .stat b { margin-top:7px; font-size:21px; }
+  .home-tabs { gap:10px; margin-bottom:22px; }
+  .home-tab { min-height:104px; padding:16px; border-radius:17px; }
+  .home-tab span { margin-bottom:10px; font-size:11px; }
+  .home-tab strong { font-size:17px; }
+  .home-tab small { font-size:12px; }
   .schedule-panel { padding:15px; border-radius:18px; margin-bottom:26px; }
   .schedule-head { align-items:stretch; flex-direction:column; gap:12px; }
   .schedule-head label { min-width:0; }

@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=29">
+  <link rel="stylesheet" href="/style.css?v=30">
 </head>
 <body>
   <aside class="sidebar">
@@ -20,8 +20,6 @@
     <nav>
       <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panoramica</button>
       <button class="nav-item" data-view="history"><span>◷</span> Storico</button>
-      <button class="nav-item" data-view="people"><span>♙</span> Persone</button>
-      <button class="nav-item" data-view="catalog"><span>E</span> Catalogo esercizi</button>
     </nav>
     <div class="sidebar-note">
       <span>I tuoi dati sono protetti.</span>
@@ -43,7 +41,6 @@
         <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema">
           <span class="theme-icon">L</span>
         </button>
-        <button class="primary" id="new-workout">+ Nuovo allenamento</button>
       </div>
     </header>
 
@@ -57,6 +54,23 @@
         <div class="hero-graphic"><div class="pulse">↗</div></div>
       </div>
       <div class="stats" id="stats"></div>
+      <section class="home-tabs" aria-label="Azioni principali">
+        <button type="button" class="home-tab" data-go="people">
+          <span>Persone</span>
+          <strong>Anagrafica iscritti</strong>
+          <small>Cerca, aggiungi o modifica i dati delle persone.</small>
+        </button>
+        <button type="button" class="home-tab home-tab-primary" id="dashboard-new-workout">
+          <span>Allenamenti</span>
+          <strong>Crea e gestisci</strong>
+          <small>Registra una nuova sessione e poi ritrovala nello storico.</small>
+        </button>
+        <button type="button" class="home-tab" data-go="catalog">
+          <span>Catalogo esercizi</span>
+          <strong>Esercizi e macro aree</strong>
+          <small>Apri il catalogo esistente per aggiungere o rimuovere esercizi.</small>
+        </button>
+      </section>
       <section class="schedule-panel">
         <div class="schedule-head">
           <div><p class="eyebrow">AGENDA</p><h2>Calendario allenamenti</h2></div>
@@ -88,11 +102,6 @@
         </form>
         <div id="schedule-list" class="schedule-list"></div>
       </section>
-      <div class="section-head">
-        <div><p class="eyebrow">ATTIVITA RECENTI</p><h2>Ultimi allenamenti</h2></div>
-        <button class="text-button" data-go="history">Vedi tutti</button>
-      </div>
-      <div id="recent-workouts" class="workout-list"></div>
     </section>
 
     <section id="history-view" class="view hidden">
@@ -161,9 +170,6 @@
   <nav class="mobile-nav">
     <button class="nav-item active" data-view="dashboard">⌂<small>Home</small></button>
     <button class="nav-item" data-view="history">◷<small>Storico</small></button>
-    <button class="mobile-add" id="mobile-new">+</button>
-    <button class="nav-item" data-view="people">♙<small>Persone</small></button>
-    <button class="nav-item" data-view="catalog">E<small>Esercizi</small></button>
   </nav>
 
   <dialog id="workout-dialog">
@@ -304,6 +310,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=29"></script>
+  <script src="/app.js?v=30"></script>
 </body>
 </html>

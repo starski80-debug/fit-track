@@ -15,7 +15,13 @@ test("la pagina contiene le sezioni principali", () => {
   assert.match(html, /Panoramica/);
   assert.match(html, /Storico/);
   assert.match(html, /Persone/);
+  assert.match(html, /home-tabs/);
+  assert.match(html, /Anagrafica iscritti/);
+  assert.match(html, /dashboard-new-workout/);
   assert.match(html, /Registra allenamento/);
+  assert.doesNotMatch(html, /ATTIVITA RECENTI/);
+  assert.doesNotMatch(html, /recent-workouts/);
+  assert.doesNotMatch(html, /id="new-workout"/);
 });
 
 test("il catalogo contiene esercizi per tutte le zone", () => {
@@ -31,6 +37,7 @@ test("la gestione del catalogo e presente", () => {
   const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
   const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
   assert.match(html, /Catalogo esercizi/);
+  assert.match(html, /data-go="catalog"/);
   assert.match(html, /catalog-form/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS exercise_catalog/);
   assert.match(server, /POST" && url\.pathname === "\/api\/catalog"/);
@@ -274,5 +281,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v20/);
+  assert.match(worker, /fittrack-shell-v21/);
 });

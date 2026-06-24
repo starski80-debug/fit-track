@@ -50,6 +50,7 @@ h2 { margin-bottom:0; }
 .workout-side { text-align:right; }
 .workout-side b { display:block; }
 .delete { border:0; color:#aaaabd; background:transparent; margin-top:6px; font-size:12px; }
+.whatsapp-button { color:#128c7e; }
 .people-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:16px; }
 .person-card { background:#fff; border:1px solid var(--line); border-radius:18px; padding:24px; cursor:pointer; text-align:left; transition:.18s; }
 .person-card:hover { border-color:#bbb8ff; box-shadow:0 8px 25px #28245e12; transform:translateY(-2px); }
@@ -390,6 +391,7 @@ h1 { font-size:29px; letter-spacing:-.04em; }
 .area-tag[data-area="Altro"] { background:#f0f2f5; color:#6d7481; }
 .delete { color:#a2a9b7; }
 .delete:hover,.catalog-delete:hover { color:#d44d65; }
+.whatsapp-button:hover { color:#0b6f63; }
 .people-grid,.history-people { gap:15px; }
 .person-card,.history-person {
   border-color:var(--line);

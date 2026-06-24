@@ -24,14 +24,16 @@ function createSqliteStore() {
     PRAGMA busy_timeout = 5000;
     CREATE TABLE IF NOT EXISTS people (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#6c63ff', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      color TEXT NOT NULL DEFAULT '#6c63ff', phone TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS workouts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
       workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0,
       notes TEXT NOT NULL DEFAULT '', rpe INTEGER NOT NULL DEFAULT 0,
-      trainer TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      trainer TEXT NOT NULL DEFAULT '', rpe_token TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS exercises (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,13 +53,15 @@ function createSqliteStore() {
   const columns = db.prepare("PRAGMA table_info(people)").all().map((item) => item.name);
   for (const [name, definition] of [
     ["birth_date", "TEXT NOT NULL DEFAULT ''"], ["height", "REAL NOT NULL DEFAULT 0"],
-    ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"]
+    ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"],
+    ["phone", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!columns.includes(name)) db.exec(`ALTER TABLE people ADD COLUMN ${name} ${definition}`);
   }
   const workoutColumns = db.prepare("PRAGMA table_info(workouts)").all().map((item) => item.name);
   for (const [name, definition] of [
-    ["rpe", "INTEGER NOT NULL DEFAULT 0"], ["trainer", "TEXT NOT NULL DEFAULT ''"]
+    ["rpe", "INTEGER NOT NULL DEFAULT 0"], ["trainer", "TEXT NOT NULL DEFAULT ''"],
+    ["rpe_token", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!workoutColumns.includes(name)) db.exec(`ALTER TABLE workouts ADD COLUMN ${name} ${definition}`);
   }
@@ -89,7 +93,7 @@ function createSqliteStore() {
       const people = db.prepare("SELECT * FROM people ORDER BY name").all();
       const catalog = db.prepare("SELECT * FROM exercise_catalog ORDER BY body_area, name COLLATE NOCASE").all();
       const workouts = db.prepare(`
-        SELECT w.*, p.name AS person_name, p.color AS person_color
+        SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
         FROM workouts w JOIN people p ON p.id = w.person_id
         ORDER BY w.workout_date DESC, w.id DESC
       `).all();
@@ -98,12 +102,12 @@ function createSqliteStore() {
     },
     async addPerson(body) {
       return Number(db.prepare(`
-        INSERT INTO people (name, color, birth_date, height, weight, notes) VALUES (?, ?, ?, ?, ?, ?)
-      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes).lastInsertRowid);
+        INSERT INTO people (name, color, birth_date, height, weight, notes, phone) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone).lastInsertRowid);
     },
     async updatePerson(id, body) {
-      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=? WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, id).changes > 0;
+      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=? WHERE id=?`)
+        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, id).changes > 0;
     },
     async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
     async addCatalog(area, name) {
@@ -178,6 +182,24 @@ function createSqliteStore() {
         throw error;
       }
     },
+    async prepareRpeLink(id, token) {
+      db.prepare("UPDATE workouts SET rpe_token=CASE WHEN rpe_token = '' THEN ? ELSE rpe_token END WHERE id=?").run(token, id);
+      return db.prepare(`
+        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.id = ?
+      `).get(id) || null;
+    },
+    async workoutByRpeToken(token) {
+      return db.prepare(`
+        SELECT w.id, w.workout_date, w.rpe, w.rpe_token, p.name AS person_name
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.rpe_token = ?
+      `).get(token) || null;
+    },
+    async setRpeByToken(token, rpe) {
+      return db.prepare("UPDATE workouts SET rpe=? WHERE rpe_token=?").run(rpe, token).changes > 0;
+    },
     async deleteWorkout(id) { return db.prepare("DELETE FROM workouts WHERE id=?").run(id).changes > 0; }
   };
 }
@@ -212,12 +234,14 @@ function createPostgresStore() {
           id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6c63ff',
           birth_date TEXT NOT NULL DEFAULT '', height DOUBLE PRECISION NOT NULL DEFAULT 0,
           weight DOUBLE PRECISION NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
+          phone TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS workouts (
           id BIGSERIAL PRIMARY KEY, person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
           workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
           rpe INTEGER NOT NULL DEFAULT 0, trainer TEXT NOT NULL DEFAULT '',
+          rpe_token TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS exercises (
@@ -234,8 +258,10 @@ function createPostgresStore() {
         ALTER TABLE people ADD COLUMN IF NOT EXISTS height DOUBLE PRECISION NOT NULL DEFAULT 0;
         ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
         ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
+        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe_token TEXT NOT NULL DEFAULT '';
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'main';
         DO $$
@@ -266,7 +292,7 @@ function createPostgresStore() {
       const [people, catalog, workouts, exercises] = await Promise.all([
         query("SELECT * FROM people ORDER BY name"),
         query("SELECT * FROM exercise_catalog ORDER BY body_area, LOWER(name)"),
-        query(`SELECT w.*, p.name AS person_name, p.color AS person_color
+        query(`SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
           FROM workouts w JOIN people p ON p.id=w.person_id
           ORDER BY w.workout_date DESC, w.id DESC`),
         query("SELECT * FROM exercises ORDER BY id")
@@ -294,13 +320,13 @@ function createPostgresStore() {
     },
     async addPerson(body) {
       const result = await query(`
-        INSERT INTO people (name,color,birth_date,height,weight,notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes]);
+        INSERT INTO people (name,color,birth_date,height,weight,notes,phone) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
+      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone]);
       return Number(result.rows[0].id);
     },
     async updatePerson(id, body) {
-      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6 WHERE id=$7`,
-        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, id]);
+      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7 WHERE id=$8`,
+        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, id]);
       return result.rowCount > 0;
     },
     async deletePerson(id) {
@@ -392,6 +418,27 @@ function createPostgresStore() {
       } finally {
         client.release();
       }
+    },
+    async prepareRpeLink(id, token) {
+      await query("UPDATE workouts SET rpe_token=CASE WHEN rpe_token = '' THEN $1 ELSE rpe_token END WHERE id=$2", [token, id]);
+      const result = await query(`
+        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.id=$1
+      `, [id]);
+      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id) } : null;
+    },
+    async workoutByRpeToken(token) {
+      const result = await query(`
+        SELECT w.id, w.workout_date, w.rpe, w.rpe_token, p.name AS person_name
+        FROM workouts w JOIN people p ON p.id = w.person_id
+        WHERE w.rpe_token=$1
+      `, [token]);
+      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id) } : null;
+    },
+    async setRpeByToken(token, rpe) {
+      const result = await query("UPDATE workouts SET rpe=$1 WHERE rpe_token=$2", [rpe, token]);
+      return result.rowCount > 0;
     },
     async deleteWorkout(id) {
       const result = await query("DELETE FROM workouts WHERE id=$1", [id]);

@@ -5,8 +5,8 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const areas = { Petto:"PET", Dorso:"DOR", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
 const phaseLabels = { warmup:"Warm up", main:"Main part", cooldown:"Cool down" };
 const rpeLabels = {
-  1:"Rest", 2:"Really Easy", 3:"Easy", 4:"Moderate", 5:"Challenging",
-  6:"Hard", 7:"", 8:"Really Hard", 9:"Really, Really Hard", 10:"Maximal"
+  0:"Rest", 1:"Very Easy", 2:"Easy", 3:"Comfortable", 4:"Moderate", 5:"Challenging",
+  6:"Sort of Hard", 7:"Hard", 8:"Really Hard", 9:"Extremely Hard", 10:"Maximum Effort"
 };
 const defaultExerciseCatalog = {
   Petto: [
@@ -128,7 +128,7 @@ function workoutCard(workout) {
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
         ${workout.operator ? `<span>Operatore: ${escapeHtml(workout.operator)}</span>` : ""}
-        ${workout.rpe ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
+        ${workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "" ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
       </div>
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
         `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} · ${escapeHtml(item.name)}</span>`
@@ -137,6 +137,7 @@ function workoutCard(workout) {
     <div class="workout-side">
       <b>${workout.duration} min</b>
       <button class="delete" data-edit-workout="${workout.id}">Modifica</button>
+      <button class="delete whatsapp-button" data-rpe-whatsapp="${workout.id}">Invia RPE</button>
       <button class="delete" data-delete="${workout.id}">Elimina</button>
     </div>
   </article>`;
@@ -160,6 +161,7 @@ function render() {
     person.birth_date,
     person.height,
     person.weight,
+    person.phone,
     person.notes
   ].some((value) => String(value || "").toLowerCase().includes(peopleFilter)));
   $("#people-grid").innerHTML = visiblePeople.map((person) => {
@@ -167,7 +169,8 @@ function render() {
     const details = [
       person.birth_date ? `Nato/a: ${formatDate(person.birth_date)}` : "",
       person.height ? `${person.height} cm` : "",
-      person.weight ? `${person.weight} kg` : ""
+      person.weight ? `${person.weight} kg` : "",
+      person.phone ? `WhatsApp: ${person.phone}` : ""
     ].filter(Boolean);
     return `<article class="person-card" data-open-person-history="${person.id}" tabindex="0" role="button" aria-label="Apri allenamenti di ${escapeHtml(person.name)}">
       <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
@@ -273,9 +276,13 @@ function groupWorkoutsByDay(workouts) {
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
   const groupIds = day.workouts.map((workout) => workout.id).join(",");
+  const firstWorkoutId = day.workouts[0]?.id || "";
   const sessionActions = groupIds ? `
     <button type="button" class="session-edit" data-edit-workout-group="${escapeHtml(groupIds)}">
       Modifica
+    </button>
+    <button type="button" class="session-edit whatsapp-button" data-rpe-whatsapp="${firstWorkoutId}">
+      Invia RPE
     </button>
   ` : "";
   const phaseOrder = ["warmup", "main", "cooldown"];
@@ -452,7 +459,7 @@ function openWorkoutGroup(workoutIds) {
   openWorkout({
     ...first,
     duration:workouts.reduce((sum, workout) => sum + Number(workout.duration || 0), 0),
-    rpe:workouts.find((workout) => Number(workout.rpe || 0))?.rpe || first.rpe || 0,
+    rpe:workouts.find((workout) => workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "")?.rpe ?? first.rpe ?? 0,
     operator:workouts.find((workout) => workout.operator || workout.trainer)?.operator || first.operator || first.trainer || "",
     exercises:workouts.flatMap((workout) => workout.exercises || [])
   });
@@ -468,6 +475,7 @@ function openPerson(person = null) {
   form.elements.birthDate.value = person?.birth_date || "";
   form.elements.height.value = person?.height || "";
   form.elements.weight.value = person?.weight || "";
+  form.elements.phone.value = person?.phone || "";
   form.elements.notes.value = person?.notes || "";
   $("#person-dialog-title").textContent = person ? "Modifica persona" : "Aggiungi persona";
   $("#delete-person").classList.toggle("hidden", !person);
@@ -520,6 +528,16 @@ document.addEventListener("click", async (event) => {
   const editWorkoutGroupButton = event.target.closest("[data-edit-workout-group]");
   if (editWorkoutGroupButton) {
     openWorkoutGroup(editWorkoutGroupButton.dataset.editWorkoutGroup.split(",").map(Number));
+  }
+  const rpeWhatsappButton = event.target.closest("[data-rpe-whatsapp]");
+  if (rpeWhatsappButton) {
+    try {
+      const data = await request(`/api/workouts/${rpeWhatsappButton.dataset.rpeWhatsapp}/rpe-link`, { method:"POST" });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il messaggio RPE.");
+    } catch (error) {
+      toast(error.message);
+    }
   }
   const deleteButton = event.target.closest("[data-delete]");
   if (deleteButton && confirm("Eliminare questo allenamento?")) {
@@ -615,7 +633,7 @@ $("#person-form").addEventListener("submit", async (event) => {
       method:id ? "PUT" : "POST",
       body:JSON.stringify({
         name:form.get("name"), color:form.get("color"), birthDate:form.get("birthDate"),
-        height:form.get("height"), weight:form.get("weight"), notes:form.get("notes")
+        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"), notes:form.get("notes")
       })
     });
     $("#person-dialog").close();
@@ -772,8 +790,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v20")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v20", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v22")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v22", "1");
     window.location.reload();
   });
 }

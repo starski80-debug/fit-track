@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=20">
+  <link rel="stylesheet" href="/style.css?v=22">
 </head>
 <body>
   <aside class="sidebar">
@@ -145,17 +145,17 @@
         </label>
         <label>RPE - sforzo percepito
           <select name="rpe">
-            <option value="0">Non indicato</option>
-            <option value="1">1 - Rest</option>
-            <option value="2">2 - Really Easy</option>
-            <option value="3">3 - Easy</option>
+            <option value="0">0 - Rest</option>
+            <option value="1">1 - Very Easy</option>
+            <option value="2">2 - Easy</option>
+            <option value="3">3 - Comfortable</option>
             <option value="4">4 - Moderate</option>
             <option value="5">5 - Challenging</option>
-            <option value="6">6 - Hard</option>
-            <option value="7">7</option>
+            <option value="6">6 - Sort of Hard</option>
+            <option value="7">7 - Hard</option>
             <option value="8">8 - Really Hard</option>
-            <option value="9">9 - Really, Really Hard</option>
-            <option value="10">10 - Maximal</option>
+            <option value="9">9 - Extremely Hard</option>
+            <option value="10">10 - Maximum Effort</option>
           </select>
         </label>
       </div>
@@ -178,6 +178,7 @@
         <label>Colore profilo<input name="color" type="color" value="#6c63ff"></label>
         <label>Altezza (cm)<input name="height" type="number" min="0" step="0.1"></label>
         <label>Peso (kg)<input name="weight" type="number" min="0" step="0.1"></label>
+        <label>Telefono WhatsApp<input name="phone" type="tel" placeholder="+39..."></label>
       </div>
       <label>Note<input name="notes" placeholder="Informazioni facoltative"></label>
       <div class="person-form-actions">
@@ -265,6 +266,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=20"></script>
+  <script src="/app.js?v=22"></script>
 </body>
 </html>

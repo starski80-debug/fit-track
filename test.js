@@ -42,12 +42,32 @@ test("le persone possono essere modificate", () => {
   const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
   assert.match(html, /person-dialog-title/);
   assert.match(html, /Data di nascita/);
+  assert.match(html, /Telefono WhatsApp/);
   assert.match(html, /people-search/);
   assert.match(app, /data-open-person-history/);
   assert.match(app, /person-link/);
   assert.match(app, /state\.peopleSearch/);
   assert.match(app, /function openPerson/);
   assert.match(server, /req\.method === "PUT" && personMatch/);
+});
+
+test("RPE puo essere inviato con link WhatsApp pubblico", () => {
+  const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
+  const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
+  const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+  const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
+  assert.match(html, /Telefono WhatsApp/);
+  assert.match(app, /data-rpe-whatsapp/);
+  assert.match(app, /whatsappUrl/);
+  assert.match(server, /rpeLinkMatch/);
+  assert.match(server, /rpe-link/);
+  assert.match(server, /\/api\/rpe\//);
+  assert.match(server, /https:\/\/wa\.me/);
+  assert.match(server, /function rpeHtml/);
+  assert.match(server, /Maximum Effort/);
+  assert.match(server, /0, "Rest"/);
+  assert.match(database, /phone TEXT NOT NULL DEFAULT ''/);
+  assert.match(database, /rpe_token TEXT NOT NULL DEFAULT ''/);
 });
 
 test("lo storico raggruppa per giorno e mostra il grafico", () => {
@@ -209,5 +229,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v11/);
+  assert.match(worker, /fittrack-shell-v13/);
 });

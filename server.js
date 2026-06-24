@@ -97,6 +97,10 @@ function cleanText(value, maxLength) {
   return String(value || "").trim().slice(0, maxLength);
 }
 
+function cleanPhone(value) {
+  return String(value || "").replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "").slice(0, 30);
+}
+
 function finiteNumber(value, min, max) {
   const number = Number(value || 0);
   return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : 0;
@@ -119,7 +123,8 @@ function normalizePerson(body) {
     birthDate:body.birthDate ? validDate(body.birthDate) : "",
     height:finiteNumber(body.height, 0, 300),
     weight:finiteNumber(body.weight, 0, 1_000),
-    notes:cleanText(body.notes, 2_000)
+    notes:cleanText(body.notes, 2_000),
+    phone:cleanPhone(body.phone)
   };
 }
 
@@ -177,6 +182,96 @@ function clearLoginAttempts(req) {
   loginAttempts.delete(clientAddress(req));
 }
 
+function publicBaseUrl(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || (isProduction ? "https" : "http")).split(",")[0];
+  return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
+}
+
+function whatsappNumber(value) {
+  return String(value || "").replace(/[^\d]/g, "");
+}
+
+function rpeHtml(workout) {
+  const rows = [
+    [10, "Maximum Effort", "#df0900"],
+    [9, "Extremely Hard", "#ff5a00"],
+    [8, "Really Hard", "#ffa400"],
+    [7, "Hard", "#ffc043"],
+    [6, "Sort of Hard", "#5b7f1c"],
+    [5, "Challenging", "#9bd22d"],
+    [4, "Moderate", "#c7e783"],
+    [3, "Comfortable", "#0878ff"],
+    [2, "Easy", "#63a8f4"],
+    [1, "Very Easy", "#99c1f2"],
+    [0, "Rest", "#f5f5f5"]
+  ];
+  return `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FitTrack - RPE</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin:0; background:#f4f6fb; color:#081735; }
+    main { max-width:430px; margin:0 auto; padding:18px 10px 28px; }
+    .card { background:#fff; border:1px solid #dde3f0; border-radius:14px; overflow:hidden; box-shadow:0 18px 45px rgba(8,23,53,.08); }
+    header { padding:22px 20px; background:#081735; color:#fff; }
+    h1 { margin:0 0 6px; font-size:26px; }
+    p { margin:0; color:#63708d; line-height:1.45; }
+    header p { color:#cdd6ea; }
+    .table { display:grid; border-top:1px solid rgba(8,23,53,.14); }
+    button { width:100%; min-height:48px; border:0; border-bottom:1px solid rgba(8,23,53,.08); padding:11px 24px; text-align:left; font:inherit; font-size:23px; line-height:1.1; cursor:pointer; color:#101820; }
+    button:active { transform:scale(.99); }
+    button:focus-visible { outline:3px solid #081735; outline-offset:-5px; }
+    button:disabled { cursor:wait; opacity:.72; }
+    .result { padding:18px 20px 20px; font-weight:700; color:#1b8b5a; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <header>
+        <h1>RPE - sforzo percepito</h1>
+        <p>${escapeHtml(workout.person_name)} · allenamento del ${escapeHtml(workout.workout_date)}</p>
+      </header>
+      <div class="table">
+        ${rows.map(([value, label, color]) => `<button type="button" data-rpe="${value}" style="background:${color}">${value} - ${escapeHtml(label)}</button>`).join("")}
+      </div>
+      <div class="result" id="result">${workout.rpe ? `RPE gia registrato: ${workout.rpe}` : "Scegli un valore per inviare la risposta."}</div>
+    </section>
+  </main>
+  <script>
+    const result = document.querySelector("#result");
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-rpe]");
+      if (!button) return;
+      document.querySelectorAll("button").forEach((item) => item.disabled = true);
+      try {
+        const response = await fetch("/api/rpe/${escapeHtml(workout.rpe_token)}", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ rpe:Number(button.dataset.rpe) })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "Errore");
+        result.textContent = "Grazie, RPE " + button.dataset.rpe + " registrato.";
+      } catch (error) {
+        result.textContent = error.message || "Errore, riprova.";
+        document.querySelectorAll("button").forEach((item) => item.disabled = false);
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[char]);
+}
+
 function validateMutationOrigin(req) {
   if (!isProduction || !["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) return true;
   const origin = req.headers.origin;
@@ -189,6 +284,19 @@ function validateMutationOrigin(req) {
 }
 
 async function api(req, res, url) {
+  const publicRpeMatch = url.pathname.match(/^\/api\/rpe\/([a-f0-9]{32,80})$/i);
+  if (req.method === "POST" && publicRpeMatch) {
+    const body = await readBody(req);
+    const rpe = Number(body.rpe);
+    if (!Number.isInteger(rpe) || rpe < 0 || rpe > 10) {
+      return json(res, 400, { error:"Seleziona un valore RPE valido." });
+    }
+    if (!await store.setRpeByToken(publicRpeMatch[1], rpe)) {
+      return json(res, 404, { error:"Link RPE non valido o scaduto." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/status") {
     return json(res, 200, { authenticated:isAuthenticated(req), required:Boolean(appPassword) });
   }
@@ -285,6 +393,24 @@ async function api(req, res, url) {
     return json(res, 200, { ok:true });
   }
   const workoutMatch = url.pathname.match(/^\/api\/workouts\/(\d+)$/);
+  if (req.method === "POST" && workoutMatch && url.pathname.endsWith("/rpe-link")) {
+    return false;
+  }
+  const rpeLinkMatch = url.pathname.match(/^\/api\/workouts\/(\d+)\/rpe-link$/);
+  if (req.method === "POST" && rpeLinkMatch) {
+    const token = crypto.randomBytes(24).toString("hex");
+    const workout = await store.prepareRpeLink(Number(rpeLinkMatch[1]), token);
+    if (!workout) return json(res, 404, { error:"Allenamento non trovato." });
+    const phone = whatsappNumber(workout.person_phone);
+    if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
+    const rpeUrl = `${publicBaseUrl(req)}/rpe/${token}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}`;
+    return json(res, 200, {
+      ok:true,
+      url:rpeUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
   if (req.method === "PUT" && workoutMatch) {
     const body = normalizeWorkout(await readBody(req));
     if (!body.personId || !body.date || !body.exercises.length) {
@@ -302,6 +428,22 @@ async function api(req, res, url) {
     return json(res, 200, { ok:true });
   }
   return false;
+}
+
+async function serveRpePage(res, token) {
+  const workout = await store.workoutByRpeToken(token);
+  if (!workout) {
+    res.writeHead(404, { "Content-Type":"text/plain; charset=utf-8", "Cache-Control":"no-store" });
+    return res.end("Link RPE non valido o scaduto.");
+  }
+  res.writeHead(200, {
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"same-origin",
+    "Content-Security-Policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
+  });
+  res.end(rpeHtml(workout));
 }
 
 function serveFile(res, pathname) {
@@ -342,6 +484,11 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return json(res, 503, { ok:false, database:store.type });
       }
+    }
+    const rpePageMatch = url.pathname.match(/^\/rpe\/([a-f0-9]{32,80})$/i);
+    if (rpePageMatch) {
+      if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
+      return serveRpePage(res, rpePageMatch[1]);
     }
     if (url.pathname.startsWith("/api/")) {
       if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });

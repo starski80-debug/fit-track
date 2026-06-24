@@ -36,20 +36,20 @@ async function main() {
 
     for (const item of people) {
       await client.query(`
-        INSERT INTO people (id,name,color,birth_date,height,weight,notes,created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        INSERT INTO people (id,name,color,birth_date,height,weight,notes,phone,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [
         item.id, item.name, item.color, item.birth_date || "", item.height || 0,
-        item.weight || 0, item.notes || "", item.created_at
+        item.weight || 0, item.notes || "", item.phone || "", item.created_at
       ]);
     }
     for (const item of workouts) {
       await client.query(`
-        INSERT INTO workouts (id,person_id,workout_date,duration,notes,rpe,trainer,created_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        INSERT INTO workouts (id,person_id,workout_date,duration,notes,rpe,trainer,rpe_token,created_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       `, [
         item.id, item.person_id, item.workout_date, item.duration, item.notes || "",
-        item.rpe || 0, item.trainer || item.operator || "", item.created_at
+        item.rpe || 0, item.trainer || item.operator || "", item.rpe_token || "", item.created_at
       ]);
     }
     for (const item of exercises) {

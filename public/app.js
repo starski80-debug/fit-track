@@ -533,16 +533,21 @@ function switchView(view) {
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+function phaseList(phase) {
+  return $(`[data-phase-list="${phaseLabels[phase] ? phase : "main"}"]`);
+}
+
 function addExercise(defaults = {}) {
   const row = $("#exercise-template").content.firstElementChild.cloneNode(true);
+  const phase = phaseLabels[defaults.phase] ? defaults.phase : "main";
   fillAreaSelect($(".body-area", row), defaults.bodyArea || "Petto");
-  $(".phase", row).value = defaults.phase || "main";
+  $(".phase", row).value = phase;
   updateExerciseOptions(row, defaults.name);
   $(".sets", row).value = defaults.sets || "";
   $(".reps", row).value = defaults.reps || "";
   $(".weight", row).value = defaults.weight || "";
   $(".seconds", row).value = String(defaults.seconds || 0);
-  $("#exercise-list").append(row);
+  phaseList(phase).append(row);
 }
 
 function updateExerciseOptions(row, selectedName = "") {
@@ -583,7 +588,7 @@ function openWorkout(workout = null) {
   form.elements.duration.value = workout?.duration || 45;
   form.elements.operator.value = workout?.operator || workout?.trainer || "";
   form.elements.rpe.value = workout?.rpe || 0;
-  $("#exercise-list").innerHTML = "";
+  $$("[data-phase-list]").forEach((list) => { list.innerHTML = ""; });
   const exercises = workout?.exercises?.length ? workout.exercises : [{ sets:3, reps:10, phase:"main" }];
   for (const exercise of exercises) {
     addExercise({
@@ -664,7 +669,8 @@ document.addEventListener("click", async (event) => {
     if (person) openPerson(person);
   }
   if (event.target.matches(".close")) event.target.closest("dialog").close();
-  if (event.target.matches("#add-exercise")) addExercise({ sets:3, reps:10, phase:"main" });
+  const phaseAddButton = event.target.closest("[data-add-phase]");
+  if (phaseAddButton) addExercise({ sets:3, reps:10, phase:phaseAddButton.dataset.addPhase });
   if (event.target.matches(".remove-exercise")) {
     if ($$(".exercise-row").length > 1) event.target.closest(".exercise-row").remove();
     else toast("Serve almeno un esercizio.");
@@ -1014,8 +1020,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v30")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v30", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v31")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v31", "1");
     window.location.reload();
   });
 }

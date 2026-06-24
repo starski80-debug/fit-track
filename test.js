@@ -138,9 +138,13 @@ test("gli allenamenti supportano modifica, RPE, operatore, fasi e secondi", () =
   assert.match(html, /RPE - sforzo percepito/);
   assert.match(html, /Leonardo/);
   assert.match(html, /Warm up/);
+  assert.match(html, /data-phase-section="warmup"/);
+  assert.match(html, /data-add-phase="cooldown"/);
   assert.match(html, /class="seconds"/);
   assert.match(app, /data-edit-workout/);
   assert.match(app, /data-edit-workout-group/);
+  assert.match(app, /function phaseList/);
+  assert.match(app, /data-add-phase/);
   assert.match(server, /\/api\/workout-groups/);
   assert.match(app, /const method = groupIds\.length \|\| id \? "PUT" : "POST"/);
   assert.match(server, /req\.method === "PUT" && workoutMatch/);
@@ -281,5 +285,5 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v21/);
+  assert.match(worker, /fittrack-shell-v22/);
 });

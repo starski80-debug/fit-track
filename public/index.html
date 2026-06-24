@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=30">
+  <link rel="stylesheet" href="/style.css?v=31">
 </head>
 <body>
   <aside class="sidebar">
@@ -203,10 +203,31 @@
           </select>
         </label>
       </div>
-      <div class="exercise-title"><h3>Esercizi</h3><span>Warm up, main part e cool down</span></div>
-      <div id="exercise-list"></div>
+      <div class="exercise-title"><h3>Esercizi</h3><span>Divisi per fase della sessione</span></div>
+      <div id="exercise-list" class="exercise-phase-list">
+        <section class="exercise-phase-section" data-phase-section="warmup">
+          <div class="exercise-phase-head">
+            <div><h4>Warm up</h4><p>Riscaldamento, mobilita e attivazione.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="warmup">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="warmup"></div>
+        </section>
+        <section class="exercise-phase-section" data-phase-section="main">
+          <div class="exercise-phase-head">
+            <div><h4>Main part</h4><p>Allenamento principale e lavoro centrale.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="main">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="main"></div>
+        </section>
+        <section class="exercise-phase-section" data-phase-section="cooldown">
+          <div class="exercise-phase-head">
+            <div><h4>Cool down</h4><p>Stretching, defaticamento e recupero.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="cooldown">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="cooldown"></div>
+        </section>
+      </div>
       <div class="exercise-footer">
-        <button type="button" class="secondary" id="add-exercise">+ Aggiungi esercizio</button>
         <button class="primary" type="submit">Salva allenamento</button>
       </div>
     </form>
@@ -287,7 +308,7 @@
         <option>Petto</option><option>Dorso</option><option>Spalle</option>
         <option>Braccia</option><option>Gambe</option><option>Addome</option><option>Cardio</option><option>Altro</option>
       </select>
-      <select class="phase" aria-label="Fase allenamento">
+      <select class="phase hidden-phase" aria-label="Fase allenamento">
         <option value="warmup">Warm up</option>
         <option value="main" selected>Main part</option>
         <option value="cooldown">Cool down</option>
@@ -310,6 +331,6 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=30"></script>
+  <script src="/app.js?v=31"></script>
 </body>
 </html>

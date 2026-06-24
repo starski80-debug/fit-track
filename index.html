@@ -334,6 +334,7 @@ async function load() {
     if (item.body_area === "Schiena") item.body_area = "Dorso";
   }
   for (const workout of state.data.workouts || []) {
+    workout.operator = workout.operator || workout.trainer || "";
     for (const exercise of workout.exercises || []) {
       if (exercise.body_area === "Schiena") exercise.body_area = "Dorso";
       exercise.phase = exercise.phase || "main";
@@ -407,7 +408,7 @@ function openWorkout(workout = null) {
   form.elements.personId.value = workout?.person_id || state.data.people[0]?.id || "";
   form.elements.date.value = workout?.workout_date || new Date().toISOString().slice(0, 10);
   form.elements.duration.value = workout?.duration || 45;
-  form.elements.operator.value = workout?.operator || "";
+  form.elements.operator.value = workout?.operator || workout?.trainer || "";
   form.elements.rpe.value = workout?.rpe || 0;
   $("#exercise-list").innerHTML = "";
   const exercises = workout?.exercises?.length ? workout.exercises : [{ sets:3, reps:10, phase:"main" }];

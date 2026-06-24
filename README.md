@@ -31,7 +31,7 @@ function createSqliteStore() {
       person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
       workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0,
       notes TEXT NOT NULL DEFAULT '', rpe INTEGER NOT NULL DEFAULT 0,
-      operator TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      trainer TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS exercises (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,7 +57,7 @@ function createSqliteStore() {
   }
   const workoutColumns = db.prepare("PRAGMA table_info(workouts)").all().map((item) => item.name);
   for (const [name, definition] of [
-    ["rpe", "INTEGER NOT NULL DEFAULT 0"], ["operator", "TEXT NOT NULL DEFAULT ''"]
+    ["rpe", "INTEGER NOT NULL DEFAULT 0"], ["trainer", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!workoutColumns.includes(name)) db.exec(`ALTER TABLE workouts ADD COLUMN ${name} ${definition}`);
   }
@@ -71,6 +71,9 @@ function createSqliteStore() {
     UPDATE exercises SET body_area = 'Dorso' WHERE body_area = 'Schiena';
     UPDATE exercise_catalog SET body_area = 'Dorso' WHERE body_area = 'Schiena';
   `);
+  if (workoutColumns.includes("operator") && !workoutColumns.includes("trainer")) {
+    db.exec("UPDATE workouts SET trainer = operator WHERE trainer = '' AND operator <> ''");
+  }
 
   return {
     type:"sqlite",
@@ -111,7 +114,7 @@ function createSqliteStore() {
       db.exec("BEGIN");
       try {
         const id = Number(db.prepare(`
-          INSERT INTO workouts (person_id, workout_date, duration, notes, rpe, operator) VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO workouts (person_id, workout_date, duration, notes, rpe, trainer) VALUES (?, ?, ?, ?, ?, ?)
         `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator).lastInsertRowid);
         const insert = db.prepare(`
           INSERT INTO exercises (workout_id, body_area, name, sets, reps, weight, seconds, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -128,7 +131,7 @@ function createSqliteStore() {
       db.exec("BEGIN");
       try {
         const changes = db.prepare(`
-          UPDATE workouts SET person_id=?, workout_date=?, duration=?, notes=?, rpe=?, operator=? WHERE id=?
+          UPDATE workouts SET person_id=?, workout_date=?, duration=?, notes=?, rpe=?, trainer=? WHERE id=?
         `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, id).changes;
         if (!changes) {
           db.exec("ROLLBACK");
@@ -185,7 +188,7 @@ function createPostgresStore() {
         CREATE TABLE IF NOT EXISTS workouts (
           id BIGSERIAL PRIMARY KEY, person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
           workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
-          rpe INTEGER NOT NULL DEFAULT 0, operator TEXT NOT NULL DEFAULT '',
+          rpe INTEGER NOT NULL DEFAULT 0, trainer TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS exercises (
@@ -203,9 +206,18 @@ function createPostgresStore() {
         ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
         ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS operator TEXT NOT NULL DEFAULT '';
+        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'main';
+        DO $$
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_name = 'workouts' AND column_name = 'operator'
+          ) THEN
+            EXECUTE 'UPDATE workouts SET trainer = "operator" WHERE trainer = '''' AND "operator" <> ''''';
+          END IF;
+        END $$;
         UPDATE exercises SET body_area = 'Dorso' WHERE body_area = 'Schiena';
         UPDATE exercise_catalog SET body_area = 'Dorso' WHERE body_area = 'Schiena';
         CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
@@ -279,7 +291,7 @@ function createPostgresStore() {
       try {
         await client.query("BEGIN");
         const result = await client.query(`
-          INSERT INTO workouts (person_id,workout_date,duration,notes,rpe,operator) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
+          INSERT INTO workouts (person_id,workout_date,duration,notes,rpe,trainer) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
         `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator]);
         const id = Number(result.rows[0].id);
         for (const item of body.exercises) {
@@ -301,7 +313,7 @@ function createPostgresStore() {
       try {
         await client.query("BEGIN");
         const result = await client.query(`
-          UPDATE workouts SET person_id=$1,workout_date=$2,duration=$3,notes=$4,rpe=$5,operator=$6 WHERE id=$7
+          UPDATE workouts SET person_id=$1,workout_date=$2,duration=$3,notes=$4,rpe=$5,trainer=$6 WHERE id=$7
         `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, id]);
         if (!result.rowCount) {
           await client.query("ROLLBACK");

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
@@ -12,16 +12,20 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=15">
+  <link rel="stylesheet" href="/style.css?v=37">
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="#"><span class="brand-mark">F</span><span>FitTrack</span></a>
+    <a class="brand" href="#"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></a>
     <nav>
-      <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panoramica</button>
-      <button class="nav-item" data-view="history"><span>◷</span> Storico</button>
-      <button class="nav-item" data-view="people"><span>♙</span> Persone</button>
-      <button class="nav-item" data-view="catalog"><span>E</span> Catalogo esercizi</button>
+      <button class="nav-item active" data-view="dashboard"><span>H</span> Panoramica</button>
+      <button class="nav-item" data-view="people"><span>P</span> Anagrafiche clienti</button>
+      <button class="nav-item" data-view="workouts"><span>A</span> Allenamenti</button>
+      <button class="nav-item" data-view="calendar"><span>C</span> Calendario</button>
+      <button class="nav-item" data-view="groups"><span>G</span> Gruppi</button>
+      <button class="nav-item" data-view="employees"><span>D</span> Dipendenti</button>
+      <button class="nav-item" data-view="templates"><span>T</span> Schede di allenamento</button>
+      <button class="nav-item" data-view="history"><span>S</span> Storico</button>
     </nav>
     <div class="sidebar-note">
       <span>I tuoi dati sono protetti.</span>
@@ -43,31 +47,141 @@
         <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Cambia tema" title="Cambia tema">
           <span class="theme-icon">L</span>
         </button>
-        <button class="primary" id="new-workout">+ Nuovo allenamento</button>
       </div>
     </header>
 
     <section id="dashboard-view" class="view">
-      <div class="hero">
+      <div class="hero brand-hero" aria-label="Formae - La tua forza, il tuo potenziale">
+        <img class="hero-logo" src="/brand/formae-banner.png" alt="Formae - La tua forza, il tuo potenziale">
         <div>
           <span class="pill">IL TUO RITMO</span>
           <h2>Ogni allenamento<br>conta.</h2>
           <p>Registra i progressi di tutti, un esercizio alla volta.</p>
         </div>
-        <div class="hero-graphic"><div class="pulse">↗</div></div>
+        <div class="hero-graphic"><div class="pulse">â†—</div></div>
       </div>
       <div class="stats" id="stats"></div>
+      <section class="home-tabs" aria-label="Azioni principali">
+        <button type="button" class="home-tab" data-go="people">
+          <span>Persone</span>
+          <strong>Anagrafica iscritti</strong>
+          <small>Cerca, aggiungi o modifica i dati delle persone.</small>
+        </button>
+        <button type="button" class="home-tab home-tab-primary" data-go="workouts">
+          <span>Allenamenti</span>
+          <strong>Crea e gestisci</strong>
+          <small>Registra una nuova sessione e poi ritrovala nello storico.</small>
+        </button>
+        <button type="button" class="home-tab" data-go="catalog">
+          <span>Catalogo esercizi</span>
+          <strong>Esercizi e macro aree</strong>
+          <small>Apri il catalogo esistente per aggiungere o rimuovere esercizi.</small>
+        </button>
+      </section>
+    </section>
+
+    <section id="calendar-view" class="view hidden">
+      <section class="schedule-panel page-panel">
+        <div class="schedule-head">
+          <div><p class="eyebrow">AGENDA</p><h2>Calendario allenamenti</h2></div>
+          <label>Giorno selezionato
+            <input id="schedule-date" type="date">
+          </label>
+        </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
+        <form id="schedule-form" class="schedule-form">
+          <input name="id" type="hidden">
+          <label>Persona
+            <select name="personId" id="schedule-person" required></select>
+          </label>
+          <label>Personal trainer
+            <select name="trainer" required>
+              <option value="">Seleziona</option>
+              <option>Leonardo</option><option>Michele</option><option>Giulia</option>
+            </select>
+          </label>
+          <label>Orario
+            <input name="time" type="time" required>
+          </label>
+          <label>Data
+            <input name="date" id="schedule-form-date" type="date" required>
+          </label>
+          <div class="schedule-actions">
+            <button class="secondary hidden" id="schedule-cancel-edit" type="button">Annulla</button>
+            <button class="primary" id="schedule-submit" type="submit">Aggiungi in agenda</button>
+          </div>
+        </form>
+        <div id="schedule-list" class="schedule-list"></div>
+      </section>
+    </section>
+
+    <section id="workouts-view" class="view hidden">
       <div class="section-head">
-        <div><p class="eyebrow">ATTIVITA RECENTI</p><h2>Ultimi allenamenti</h2></div>
-        <button class="text-button" data-go="history">Vedi tutti</button>
+        <div><p class="eyebrow">SESSIONI</p><h2>Allenamenti</h2></div>
+        <button class="secondary" id="new-workout">+ Nuovo allenamento</button>
       </div>
-      <div id="recent-workouts" class="workout-list"></div>
+      <p class="section-help">Crea una sessione o apri gli ultimi allenamenti registrati per modificarli, inviare RPE o controllare i dettagli.</p>
+      <div id="workout-list" class="workout-list"></div>
+    </section>
+
+    <section id="groups-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">ORGANIZZAZIONE</p><h2>Gruppi</h2></div>
+      </div>
+      <form id="group-form" class="group-form">
+        <input name="id" type="hidden">
+        <label>Nome gruppo<input name="name" placeholder="Es. Small group mattina" required></label>
+        <label>Colore<input name="color" type="color" value="#ffcc05"></label>
+        <label>Note<input name="notes" placeholder="Obiettivo, giorni, livello..."></label>
+        <div class="group-actions">
+          <button class="secondary hidden" id="group-cancel-edit" type="button">Annulla</button>
+          <button class="primary" id="group-submit" type="submit">Salva gruppo</button>
+        </div>
+      </form>
+      <div id="group-detail" class="group-detail hidden"></div>
+      <div id="groups-grid" class="groups-grid"></div>
+    </section>
+
+    <section id="employees-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">STAFF</p><h2>Anagrafica dipendenti</h2></div>
+      </div>
+      <form id="employee-form" class="group-form">
+        <input name="id" type="hidden">
+        <label>Nome<input name="name" placeholder="Es. Leonardo" required></label>
+        <label>Colore<input name="color" type="color" value="#ffcc05"></label>
+        <label>Ruolo<input name="role" placeholder="Personal trainer"></label>
+        <div class="group-actions">
+          <button class="secondary hidden" id="employee-cancel-edit" type="button">Annulla</button>
+          <button class="primary" id="employee-submit" type="submit">Salva dipendente</button>
+        </div>
+      </form>
+      <div id="employees-grid" class="groups-grid"></div>
+    </section>
+
+    <section id="templates-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">PROGRAMMAZIONE</p><h2>Schede di allenamento</h2></div>
+      </div>
+      <form id="template-form" class="template-form">
+        <input name="id" type="hidden">
+        <label>Titolo scheda<input name="title" placeholder="Es. Programmazione A" required></label>
+        <label>Persona<select name="personId" id="template-person"></select></label>
+        <label>Note generali<input name="notes" placeholder="Obiettivo o periodo"></label>
+        <div id="template-rows" class="template-rows"></div>
+        <div class="template-actions">
+          <button type="button" class="secondary" id="add-template-row">+ Riga esercizio</button>
+          <button type="button" class="secondary hidden" id="template-cancel-edit">Annulla</button>
+          <button class="primary" type="submit">Salva scheda</button>
+        </div>
+      </form>
+      <div id="templates-list" class="templates-list"></div>
     </section>
 
     <section id="history-view" class="view hidden">
       <div class="section-head">
         <div><p class="eyebrow">DIARIO</p><h2 id="history-title">Scegli una persona</h2></div>
-        <button class="secondary hidden" id="history-back">← Tutte le persone</button>
+        <button class="secondary hidden" id="history-back">â† Tutte le persone</button>
       </div>
       <p class="section-help" id="history-help">Clicca su un nome per vedere allenamenti, giornate e andamento.</p>
       <div id="history-people" class="history-people"></div>
@@ -79,6 +193,13 @@
             <span>Serie x ripetizioni x (kg + secondi)</span>
           </div>
           <div id="progress-chart" class="progress-chart"></div>
+        </section>
+        <section class="chart-card">
+          <div class="chart-head">
+            <div><p class="eyebrow">RPE</p><h3>Sforzo percepito nel tempo</h3></div>
+            <span>Scala 0-10 della sessione</span>
+          </div>
+          <div id="rpe-progress-chart" class="progress-chart rpe-progress-chart"></div>
         </section>
         <div class="section-head history-days-head">
           <div><p class="eyebrow">GIORNO PER GIORNO</p><h2>Allenamenti</h2></div>
@@ -92,7 +213,12 @@
         <div><p class="eyebrow">ATLETI</p><h2>Le persone</h2></div>
         <button class="secondary" id="new-person">+ Aggiungi persona</button>
       </div>
-      <p class="section-help">Clicca su una persona per visualizzare e modificare i suoi dati.</p>
+      <p class="section-help">Clicca su una persona per aprire subito i suoi allenamenti. Usa "Modifica dati" per l'anagrafica.</p>
+      <div class="people-search">
+        <label>Cerca persone
+          <input id="people-search" type="search" placeholder="Cerca per nome, note o dati">
+        </label>
+      </div>
       <div id="people-grid" class="people-grid"></div>
     </section>
 
@@ -116,17 +242,19 @@
   </main>
 
   <nav class="mobile-nav">
-    <button class="nav-item active" data-view="dashboard">⌂<small>Home</small></button>
-    <button class="nav-item" data-view="history">◷<small>Storico</small></button>
-    <button class="mobile-add" id="mobile-new">+</button>
-    <button class="nav-item" data-view="people">♙<small>Persone</small></button>
-    <button class="nav-item" data-view="catalog">E<small>Esercizi</small></button>
+    <button class="nav-item active" data-view="dashboard">H<small>Home</small></button>
+    <button class="nav-item" data-view="people">P<small>Clienti</small></button>
+    <button class="nav-item" data-view="workouts">A<small>Allen.</small></button>
+    <button class="nav-item" data-view="calendar">C<small>Agenda</small></button>
+    <button class="nav-item" data-view="groups">G<small>Gruppi</small></button>
+    <button class="nav-item" data-view="history">S<small>Storico</small></button>
   </nav>
 
   <dialog id="workout-dialog">
     <form id="workout-form">
       <input name="id" type="hidden">
-      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">×</button></div>
+      <input name="groupIds" type="hidden">
+      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">Ã—</button></div>
       <div class="form-grid">
         <label>Persona<select name="personId" id="person-select" required></select></label>
         <label>Data<input name="date" type="date" required></label>
@@ -139,24 +267,45 @@
         </label>
         <label>RPE - sforzo percepito
           <select name="rpe">
-            <option value="0">Non indicato</option>
-            <option value="1">1 - Rest</option>
-            <option value="2">2 - Really Easy</option>
-            <option value="3">3 - Easy</option>
+            <option value="0">0 - Rest</option>
+            <option value="1">1 - Very Easy</option>
+            <option value="2">2 - Easy</option>
+            <option value="3">3 - Comfortable</option>
             <option value="4">4 - Moderate</option>
             <option value="5">5 - Challenging</option>
-            <option value="6">6 - Hard</option>
-            <option value="7">7</option>
+            <option value="6">6 - Sort of Hard</option>
+            <option value="7">7 - Hard</option>
             <option value="8">8 - Really Hard</option>
-            <option value="9">9 - Really, Really Hard</option>
-            <option value="10">10 - Maximal</option>
+            <option value="9">9 - Extremely Hard</option>
+            <option value="10">10 - Maximum Effort</option>
           </select>
         </label>
       </div>
-      <div class="exercise-title"><h3>Esercizi</h3><span>Warm up, main part e cool down</span></div>
-      <div id="exercise-list"></div>
+      <div class="exercise-title"><h3>Esercizi</h3><span>Divisi per fase della sessione</span></div>
+      <div id="exercise-list" class="exercise-phase-list">
+        <section class="exercise-phase-section" data-phase-section="warmup">
+          <div class="exercise-phase-head">
+            <div><h4>Warm up</h4><p>Riscaldamento, mobilita e attivazione.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="warmup">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="warmup"></div>
+        </section>
+        <section class="exercise-phase-section" data-phase-section="main">
+          <div class="exercise-phase-head">
+            <div><h4>Main part</h4><p>Allenamento principale e lavoro centrale.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="main">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="main"></div>
+        </section>
+        <section class="exercise-phase-section" data-phase-section="cooldown">
+          <div class="exercise-phase-head">
+            <div><h4>Cool down</h4><p>Stretching, defaticamento e recupero.</p></div>
+            <button type="button" class="secondary add-phase-exercise" data-add-phase="cooldown">+ Aggiungi</button>
+          </div>
+          <div class="phase-exercise-list" data-phase-list="cooldown"></div>
+        </section>
+      </div>
       <div class="exercise-footer">
-        <button type="button" class="secondary" id="add-exercise">+ Aggiungi esercizio</button>
         <button class="primary" type="submit">Salva allenamento</button>
       </div>
     </form>
@@ -165,13 +314,15 @@
   <dialog id="person-dialog">
     <form id="person-form">
       <input name="id" type="hidden">
-      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">×</button></div>
+      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">Ã—</button></div>
       <label>Nome<input name="name" placeholder="Es. Luca" required autofocus></label>
       <div class="form-grid">
         <label>Data di nascita<input name="birthDate" type="date"></label>
         <label>Colore profilo<input name="color" type="color" value="#6c63ff"></label>
         <label>Altezza (cm)<input name="height" type="number" min="0" step="0.1"></label>
         <label>Peso (kg)<input name="weight" type="number" min="0" step="0.1"></label>
+        <label>Telefono WhatsApp<input name="phone" type="tel" placeholder="+39..."></label>
+        <label>Gruppo<select name="groupId" id="person-group-select"></select></label>
       </div>
       <label>Note<input name="notes" placeholder="Informazioni facoltative"></label>
       <div class="person-form-actions">
@@ -183,7 +334,7 @@
 
   <dialog id="catalog-dialog">
     <form id="catalog-form">
-      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">Ã—</button></div>
       <label>Zona del corpo
         <select name="bodyArea" required>
           <option>Petto</option><option>Dorso</option><option>Spalle</option>
@@ -200,7 +351,7 @@
 
   <dialog id="login-dialog" class="login-dialog">
     <form id="login-form">
-      <div class="login-brand"><span class="brand-mark">F</span><span>FitTrack</span></div>
+      <div class="login-brand"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></div>
       <p class="eyebrow">AREA PERSONALE</p>
       <h2>Accedi ai tuoi allenamenti</h2>
       <p class="login-copy">Inserisci la password configurata su Railway.</p>
@@ -214,7 +365,7 @@
     <div class="install-content">
       <div class="modal-head">
         <div><p class="eyebrow">APP SUL TELEFONO</p><h2>Installa FitTrack</h2></div>
-        <button type="button" class="close">×</button>
+        <button type="button" class="close">Ã—</button>
       </div>
       <div class="install-icon"><img src="/icons/icon-192.png" alt=""></div>
       <div id="ios-install-help">
@@ -226,7 +377,17 @@
           <li>Conferma con <strong>Aggiungi</strong>.</li>
         </ol>
       </div>
-      <p class="install-note">L’app userà sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+      <p class="install-note">Lâ€™app userÃ  sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+    </div>
+  </dialog>
+
+  <dialog id="day-dialog">
+    <div class="day-dialog-content">
+      <div class="modal-head">
+        <div><p class="eyebrow">DETTAGLIO GIORNO</p><h2 id="day-dialog-title">Calendario</h2></div>
+        <button type="button" class="close">Ã—</button>
+      </div>
+      <div id="day-dialog-list" class="schedule-list day-dialog-list"></div>
     </div>
   </dialog>
 
@@ -236,7 +397,7 @@
         <option>Petto</option><option>Dorso</option><option>Spalle</option>
         <option>Braccia</option><option>Gambe</option><option>Addome</option><option>Cardio</option><option>Altro</option>
       </select>
-      <select class="phase" aria-label="Fase allenamento">
+      <select class="phase hidden-phase" aria-label="Fase allenamento">
         <option value="warmup">Warm up</option>
         <option value="main" selected>Main part</option>
         <option value="cooldown">Cool down</option>
@@ -255,10 +416,23 @@
         <option value="90">90 sec</option><option value="120">120 sec</option><option value="180">180 sec</option>
         <option value="240">240 sec</option><option value="300">300 sec</option>
       </select>
-      <button type="button" class="remove-exercise" aria-label="Rimuovi">×</button>
+      <button type="button" class="remove-exercise" aria-label="Rimuovi">Ã—</button>
+    </div>
+  </template>
+  <template id="template-row-template">
+    <div class="template-row">
+      <input class="template-block" placeholder="Blocco" aria-label="Blocco">
+      <input class="template-exercise" placeholder="Esercizio" aria-label="Esercizio">
+      <input class="template-sets" placeholder="Serie" aria-label="Serie">
+      <input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni">
+      <input class="template-rest" placeholder="Recupero" aria-label="Recupero">
+      <input class="template-notes" placeholder="Note" aria-label="Note">
+      <input class="template-weeks" placeholder="1-7 week" aria-label="Settimane">
+      <button type="button" class="remove-template-row" aria-label="Rimuovi">Ã—</button>
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=15"></script>
+  <script src="/app.js?v=37"></script>
 </body>
 </html>
+

@@ -1,12 +1,15 @@
-const state = { data: null, view: "dashboard", historyPersonId: null };
+const state = {
+  data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
+  scheduleDate:new Date().toISOString().slice(0, 10), workoutPersonId:null, groupDetailId:null
+};
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const areas = { Petto:"PET", Dorso:"DOR", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
 const phaseLabels = { warmup:"Warm up", main:"Main part", cooldown:"Cool down" };
 const rpeLabels = {
-  1:"Rest", 2:"Really Easy", 3:"Easy", 4:"Moderate", 5:"Challenging",
-  6:"Hard", 7:"", 8:"Really Hard", 9:"Really, Really Hard", 10:"Maximal"
+  0:"Rest", 1:"Very Easy", 2:"Easy", 3:"Comfortable", 4:"Moderate", 5:"Challenging",
+  6:"Sort of Hard", 7:"Hard", 8:"Really Hard", 9:"Extremely Hard", 10:"Maximum Effort"
 };
 const defaultExerciseCatalog = {
   Petto: [
@@ -56,10 +59,23 @@ function bodyAreaList() {
   return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "it"));
 }
 
-function fillAreaSelect(select, selected = "") {
-  const current = selected || select.value || "Petto";
-  select.innerHTML = bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
-  select.value = bodyAreaList().includes(current) ? current : "Altro";
+function groupById(id) {
+  return (state.data?.groups || []).find((group) => group.id === Number(id)) || null;
+}
+
+function bodyAreasForPhase(phase, selected = "") {
+  const areas = bodyAreaList();
+  if (phase === "warmup" || phase === "cooldown") return ["Altro"];
+  const filtered = areas.filter((area) => area !== "Altro");
+  if (selected && selected !== "Altro" && !filtered.includes(selected)) filtered.push(selected);
+  return filtered.length ? filtered : areas;
+}
+
+function fillAreaSelect(select, selected = "", phase = "main") {
+  const options = bodyAreasForPhase(phase, selected);
+  const current = selected || select.value || options[0] || "Altro";
+  select.innerHTML = options.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+  select.value = options.includes(current) ? current : options[0] || "Altro";
 }
 
 function toast(message) {
@@ -121,14 +137,14 @@ function workoutCard(workout) {
   const bodyAreas = [...new Set(workout.exercises.map((item) => item.body_area))];
   const exerciseCount = workout.exercises.length;
   return `<article class="workout-card">
-    <div class="avatar" style="background:${escapeHtml(workout.person_color)}">${escapeHtml(workout.person_name[0])}</div>
+    <button type="button" class="avatar avatar-button" data-open-person-history="${workout.person_id}" style="background:${escapeHtml(workout.person_color)}" aria-label="Apri allenamenti di ${escapeHtml(workout.person_name)}">${escapeHtml(workout.person_name[0])}</button>
     <div class="workout-main">
-      <h3>${escapeHtml(workout.person_name)} · ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
+      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> · ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
       <div class="workout-meta">
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
         ${workout.operator ? `<span>Operatore: ${escapeHtml(workout.operator)}</span>` : ""}
-        ${workout.rpe ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
+        ${workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "" ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
       </div>
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
         `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} · ${escapeHtml(item.name)}</span>`
@@ -137,9 +153,165 @@ function workoutCard(workout) {
     <div class="workout-side">
       <b>${workout.duration} min</b>
       <button class="delete" data-edit-workout="${workout.id}">Modifica</button>
+      <button class="delete whatsapp-button" data-rpe-whatsapp="${workout.id}">Invia RPE</button>
       <button class="delete" data-delete="${workout.id}">Elimina</button>
     </div>
   </article>`;
+}
+
+function formaeWhatsappSignature() {
+  return `\n\nFormae - La tua forza, il tuo potenziale`;
+}
+
+function scheduleReminderText(item) {
+  return `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!${formaeWhatsappSignature()}`;
+}
+
+function trainerColor(name = "") {
+  const employee = (state.data?.employees || []).find((item) => item.name === name);
+  return employee?.color || { Leonardo:"#ffcc05", Michele:"#32d1ff", Giulia:"#ff6aa2" }[name] || "#6c63ff";
+}
+
+function scheduleCard(item) {
+  const reminderText = scheduleReminderText(item);
+  return `<article class="schedule-item" style="--trainer-color:${escapeHtml(trainerColor(item.trainer))}">
+    <div class="schedule-time">${escapeHtml(item.scheduled_time || "--:--")}</div>
+    <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
+    <div class="schedule-body">
+      <h3>${escapeHtml(item.person_name)}</h3>
+      <p>${formatDate(item.scheduled_date)} · PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
+      ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
+    </div>
+    <div class="schedule-item-actions">
+      <button type="button" class="schedule-reminder whatsapp-button" data-schedule-reminder="${item.id}">WhatsApp</button>
+      <button type="button" class="schedule-edit" data-edit-schedule="${item.id}">Modifica</button>
+      <button type="button" class="schedule-delete" data-delete-schedule="${item.id}">Elimina</button>
+    </div>
+    <span class="hidden" data-reminder-text="${item.id}">${escapeHtml(reminderText)}</span>
+  </article>`;
+}
+
+function resetScheduleForm() {
+  const form = $("#schedule-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.date.value = state.scheduleDate;
+  $("#schedule-submit").textContent = "Aggiungi in agenda";
+  $("#schedule-cancel-edit").classList.add("hidden");
+}
+
+function openScheduleEdit(item) {
+  const form = $("#schedule-form");
+  state.scheduleDate = item.scheduled_date;
+  $("#schedule-date").value = state.scheduleDate;
+  form.elements.id.value = item.id;
+  form.elements.personId.value = item.person_id;
+  form.elements.trainer.value = item.trainer || "";
+  form.elements.time.value = item.scheduled_time || "";
+  form.elements.date.value = item.scheduled_date || state.scheduleDate;
+  $("#schedule-submit").textContent = "Salva modifiche";
+  $("#schedule-cancel-edit").classList.remove("hidden");
+  renderSchedule();
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function renderSchedule() {
+  const schedule = state.data.schedule || [];
+  $("#schedule-date").value = state.scheduleDate;
+  $("#schedule-form-date").value = state.scheduleDate;
+  const employeeOptions = employeeOptionHtml();
+  $$("select[name=trainer], select[name=operator]").forEach((select) => {
+    const current = select.value;
+    select.innerHTML = employeeOptions;
+    select.value = current;
+  });
+  $("#schedule-person").innerHTML = state.data.people.map((person) =>
+    `<option value="${person.id}">${escapeHtml(person.name)}</option>`
+  ).join("");
+  const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
+  const upcoming = schedule
+    .filter((item) => item.scheduled_date > state.scheduleDate)
+    .slice(0, 6);
+  const tomorrow = tomorrowDate();
+  const reminders = schedule.filter((item) => item.scheduled_date === tomorrow);
+  $("#schedule-list").innerHTML = `
+    <div class="schedule-column calendar-detail">
+      <h3>Dettaglio ${formatDate(state.scheduleDate)}</h3>
+      ${selected.map(scheduleCard).join("") || `<div class="empty schedule-empty">Clicca su un giorno o aggiungi un appuntamento.</div>`}
+    </div>
+    <div class="schedule-column schedule-reminders">
+      <h3>Promemoria di domani</h3>
+      ${reminders.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun promemoria per domani.</div>`}
+    </div>
+    <div class="schedule-column">
+      <h3>${formatDate(state.scheduleDate)}</h3>
+      ${selected.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessuno in agenda per questo giorno.</div>`}
+    </div>
+    <div class="schedule-column">
+      <h3>Prossimi appuntamenti</h3>
+      ${upcoming.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun appuntamento futuro.</div>`}
+    </div>
+  `;
+  renderCalendarGrid();
+}
+
+function employeeOptionHtml() {
+  const employees = state.data?.employees?.length
+    ? state.data.employees
+    : [{ name:"Leonardo" }, { name:"Michele" }, { name:"Giulia" }];
+  return [`<option value="">Seleziona</option>`, ...employees.map((item) => `<option>${escapeHtml(item.name)}</option>`)].join("");
+}
+
+function renderCalendarGrid() {
+  const current = new Date(`${state.scheduleDate}T12:00:00`);
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  const first = new Date(year, month, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const schedule = state.data.schedule || [];
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(`<div class="calendar-day muted"></div>`);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const items = schedule.filter((item) => item.scheduled_date === date);
+    const colors = [...new Set(items.map((item) => trainerColor(item.trainer)))];
+    const fill = colors.length === 1 ? colors[0] : colors.length > 1
+      ? `linear-gradient(135deg, ${colors.map((color, index) => `${color} ${Math.round(index * 100 / colors.length)}%, ${color} ${Math.round((index + 1) * 100 / colors.length)}%`).join(", ")})`
+      : "";
+    cells.push(`<button type="button" class="calendar-day ${items.length ? "has-items" : ""} ${date === state.scheduleDate ? "active" : ""}" data-calendar-day="${date}" style="${fill ? `--day-fill:${escapeHtml(fill)}` : ""}">
+      <strong>${day}</strong>
+      <span>${items.length ? `${items.length} app.` : ""}</span>
+      <div class="calendar-colors">${colors.map((color) => `<i style="background:${escapeHtml(color)}"></i>`).join("")}</div>
+    </button>`);
+  }
+  $("#calendar-grid").innerHTML = `
+    <div class="calendar-month">${new Intl.DateTimeFormat("it-IT", { month:"long", year:"numeric" }).format(current)}</div>
+    <div class="calendar-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
+    <div class="calendar-days">${cells.join("")}</div>
+  `;
+}
+
+function openDayDialog(date) {
+  state.scheduleDate = date;
+  renderSchedule();
+  const items = (state.data.schedule || []).filter((item) => item.scheduled_date === date);
+  $("#day-dialog-title").textContent = formatDate(date);
+  $("#day-dialog-list").innerHTML = items.map(scheduleCard).join("") ||
+    `<div class="empty schedule-empty">Nessun appuntamento in questa giornata.</div>`;
+  $("#day-dialog").showModal();
+}
+
+function tomorrowDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  return date.toISOString().slice(0, 10);
+}
+
+function whatsappReminderUrl(item, text) {
+  const phone = String(item.person_phone || "").replace(/[^\d]/g, "");
+  if (!phone) return "";
+  return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
 }
 
 function render() {
@@ -151,33 +323,190 @@ function render() {
     ["Persone", stats.people]
   ].map(([label,value]) => `<div class="stat"><span>${label}</span><b>${value}</b></div>`).join("");
 
-  $("#recent-workouts").innerHTML = workouts.slice(0, 4).map(workoutCard).join("") ||
-    `<div class="empty">Nessun allenamento registrato.</div>`;
+  renderSchedule();
+  renderGroups();
+  renderEmployees();
+  renderTemplates();
+  renderWorkoutsView();
   renderHistory();
-  $("#people-grid").innerHTML = people.map((person) => {
+  const peopleFilter = state.peopleSearch.trim().toLowerCase();
+  const visiblePeople = people.filter((person) => [
+    person.name,
+    groupById(person.group_id)?.name,
+    person.birth_date,
+    person.height,
+    person.weight,
+    person.phone,
+    person.notes
+  ].some((value) => String(value || "").toLowerCase().includes(peopleFilter)));
+  $("#people-grid").innerHTML = visiblePeople.map((person) => {
     const personWorkouts = workouts.filter((item) => item.person_id === person.id);
+    const group = groupById(person.group_id);
     const details = [
+      group ? `Gruppo: ${group.name}` : "",
       person.birth_date ? `Nato/a: ${formatDate(person.birth_date)}` : "",
       person.height ? `${person.height} cm` : "",
-      person.weight ? `${person.weight} kg` : ""
+      person.weight ? `${person.weight} kg` : "",
+      person.phone ? `WhatsApp: ${person.phone}` : ""
     ].filter(Boolean);
-    return `<article class="person-card" data-edit-person="${person.id}" tabindex="0" role="button">
+    return `<article class="person-card" data-open-person-history="${person.id}" tabindex="0" role="button" aria-label="Apri allenamenti di ${escapeHtml(person.name)}">
       <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
       <h3>${escapeHtml(person.name)}</h3>
       <p>${personWorkouts.length} ${personWorkouts.length === 1 ? "allenamento" : "allenamenti"}</p>
       ${details.length ? `<div class="person-details">${details.map((detail) => `<span>${escapeHtml(detail)}</span>`).join("")}</div>` : ""}
+      <button type="button" class="person-edit" data-edit-person="${person.id}">Modifica dati</button>
     </article>`;
-  }).join("");
+  }).join("") || `<div class="empty">Nessuna persona trovata.</div>`;
 
   const personOptions = people.map((person) =>
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
   $("#person-select").innerHTML = personOptions;
+  $("#template-person").innerHTML = [`<option value="0">Nessuna persona</option>`, personOptions].join("");
+  $("#person-group-select").innerHTML = [
+    `<option value="0">Nessun gruppo</option>`,
+    ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
+  ].join("");
   $("#catalog-filter").innerHTML = [
     `<option value="">Tutte le zone</option>`,
     ...bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
   ].join("");
   renderCatalog();
+}
+
+function renderWorkoutsView() {
+  const people = state.data.people || [];
+  const workouts = state.data.workouts || [];
+  const person = people.find((item) => item.id === Number(state.workoutPersonId));
+  if (!person) {
+    $("#workout-list").innerHTML = `<div class="workout-people-grid">
+      ${people.map((item) => {
+        const count = workouts.filter((workout) => workout.person_id === item.id).length;
+        return `<button type="button" class="person-card workout-person-card" data-workout-person="${item.id}">
+          <div class="avatar" style="background:${escapeHtml(item.color)}">${escapeHtml(item.name[0])}</div>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
+        </button>`;
+      }).join("") || `<div class="empty">Nessuna persona inserita.</div>`}
+    </div>`;
+    return;
+  }
+  const personWorkouts = workouts.filter((workout) => workout.person_id === person.id);
+  $("#workout-list").innerHTML = `
+    <div class="section-head compact-head">
+      <div><p class="eyebrow">ALLENAMENTI DI</p><h2>${escapeHtml(person.name)}</h2></div>
+      <button type="button" class="secondary" id="workout-person-back">Tutte le persone</button>
+    </div>
+    ${personWorkouts.map(workoutCard).join("") || `<div class="empty">Nessun allenamento registrato per ${escapeHtml(person.name)}.</div>`}
+  `;
+}
+
+function renderGroups() {
+  const groups = state.data.groups || [];
+  const people = state.data.people || [];
+  const workouts = state.data.workouts || [];
+  const selected = groups.find((group) => group.id === Number(state.groupDetailId));
+  $("#group-detail").classList.toggle("hidden", !selected);
+  if (selected) {
+    const members = people.filter((person) => Number(person.group_id || 0) === selected.id);
+    $("#group-detail").innerHTML = `
+      <div class="section-head compact-head">
+        <div><p class="eyebrow">GRUPPO</p><h2>${escapeHtml(selected.name)}</h2></div>
+        <button type="button" class="secondary" id="group-detail-back">Chiudi dettaglio</button>
+      </div>
+      <div class="group-members-detail">
+        ${members.map((person) => {
+          const personWorkouts = workouts.filter((workout) => workout.person_id === person.id);
+          const count = personWorkouts.length;
+          return `<article class="person-card">
+            <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
+            <h3>${escapeHtml(person.name)}</h3>
+            <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
+            <div class="group-workout-mini">${personWorkouts.slice(0, 3).map((workout) => `<span>${formatDate(workout.workout_date)} - ${workout.duration} min</span>`).join("") || `<span>Nessun allenamento registrato</span>`}</div>
+            <button type="button" class="person-edit" data-open-person-history="${person.id}">Apri allenamenti</button>
+            <button type="button" class="person-edit" data-edit-person="${person.id}">Modifica dati</button>
+          </article>`;
+        }).join("") || `<div class="empty">Nessun iscritto in questo gruppo.</div>`}
+      </div>`;
+  }
+  $("#groups-grid").innerHTML = groups.map((group) => {
+    const members = people.filter((person) => Number(person.group_id || 0) === group.id);
+    return `<article class="group-card" data-open-group="${group.id}">
+      <div class="group-card-head">
+        <span class="group-color" style="background:${escapeHtml(group.color)}"></span>
+        <div><h3>${escapeHtml(group.name)}</h3><p>${members.length} ${members.length === 1 ? "persona" : "persone"}</p></div>
+      </div>
+      ${group.notes ? `<p class="group-notes">${escapeHtml(group.notes)}</p>` : ""}
+      <p class="group-notes">Clicca nel gruppo per vedere iscritti e allenamenti.</p>
+      <div class="group-card-actions">
+        <button type="button" class="secondary" data-edit-group="${group.id}">Modifica</button>
+        <button type="button" class="danger small-danger" data-delete-group="${group.id}">Elimina</button>
+      </div>
+    </article>`;
+  }).join("") || `<div class="empty">Nessun gruppo creato. Aggiungi il primo gruppo dal modulo sopra.</div>`;
+}
+
+function renderEmployees() {
+  const employees = state.data.employees || [];
+  $("#employees-grid").innerHTML = employees.map((employee) => {
+    const isDefault = String(employee.id).startsWith("default-");
+    return `<article class="group-card">
+    <div class="group-card-head">
+      <span class="group-color" style="background:${escapeHtml(employee.color)}"></span>
+      <div><h3>${escapeHtml(employee.name)}</h3><p>${escapeHtml(employee.role || "Personal trainer")}</p></div>
+    </div>
+    <div class="group-card-actions">
+      ${isDefault ? `<span class="group-notes">Dipendente base: creane uno uguale per personalizzare.</span>` : `<button type="button" class="secondary" data-edit-employee="${employee.id}">Modifica</button>
+      <button type="button" class="danger small-danger" data-delete-employee="${employee.id}">Elimina</button>`}
+    </div>
+  </article>`;
+  }).join("") || `<div class="empty">Nessun dipendente inserito.</div>`;
+}
+
+function addTemplateRow(defaults = {}) {
+  const row = $("#template-row-template").content.firstElementChild.cloneNode(true);
+  $(".template-block", row).value = defaults.block || "";
+  $(".template-exercise", row).value = defaults.exercise || "";
+  $(".template-sets", row).value = defaults.sets || "";
+  $(".template-reps", row).value = defaults.reps || "";
+  $(".template-rest", row).value = defaults.rest || "";
+  $(".template-notes", row).value = defaults.notes || "";
+  $(".template-weeks", row).value = defaults.weeks || "";
+  $("#template-rows").append(row);
+}
+
+function renderTemplates() {
+  const templates = state.data.templates || [];
+  $("#templates-list").innerHTML = templates.map((template) => {
+    const person = state.data.people.find((item) => item.id === Number(template.person_id));
+    return `<article class="template-card">
+      <div class="template-card-head">
+        <div><p class="eyebrow">FORMAE PROGRAMMAZIONE</p><h3>${escapeHtml(template.title)}</h3><span>${person ? escapeHtml(person.name) : "Scheda generale"}</span></div>
+        <div>
+          <button type="button" class="secondary whatsapp-button" data-template-whatsapp="${template.id}">WhatsApp</button>
+          <button type="button" class="secondary" data-edit-template="${template.id}">Modifica</button>
+          <button type="button" class="small-danger" data-delete-template="${template.id}">Elimina</button>
+        </div>
+      </div>
+      <div class="template-table">
+        <div class="template-table-row template-table-head"><span>Blocco</span><span>Allenamento</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span><span>Week</span></div>
+        ${(template.rows || []).map((row) => `<div class="template-table-row">
+          <span>${escapeHtml(row.block)}</span><span>${escapeHtml(row.exercise)}</span><span>${escapeHtml(row.sets)}</span><span>${escapeHtml(row.reps)}</span><span>${escapeHtml(row.rest)}</span><span>${escapeHtml(row.notes)}</span><span>${escapeHtml(row.weeks)}</span>
+        </div>`).join("")}
+      </div>
+    </article>`;
+  }).join("") || `<div class="empty">Nessuna scheda creata.</div>`;
+}
+
+function templateWhatsappUrl(template) {
+  const person = state.data.people.find((item) => item.id === Number(template.person_id));
+  const phone = String(person?.phone || "").replace(/[^\d]/g, "");
+  if (!phone) return "";
+  const rows = (template.rows || []).map((row, index) =>
+    `${index + 1}. ${row.block ? `${row.block} - ` : ""}${row.exercise || "Esercizio"} | Serie ${row.sets || "-"} | Rip ${row.reps || "-"} | Rec ${row.rest || "-"}${row.notes ? ` | Note: ${row.notes}` : ""}${row.weeks ? ` | Week: ${row.weeks}` : ""}`
+  ).join("\n");
+  const message = `FORMAE - PROGRAMMAZIONE\n${template.title}\n${person ? `Cliente: ${person.name}\n` : ""}${template.notes ? `Note: ${template.notes}\n` : ""}\n${rows}\n${formaeWhatsappSignature()}`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
 function renderCatalog() {
@@ -230,6 +559,7 @@ function renderHistory() {
     ["Unita media", formatNumber(averageUnits)]
   ].map(([label, value]) => `<div class="history-stat"><span>${label}</span><b>${value}</b></div>`).join("");
   $("#progress-chart").innerHTML = progressChart(groupedDays);
+  $("#rpe-progress-chart").innerHTML = rpeTrendChart(groupedDays);
   $("#history-days").innerHTML = groupedDays.map(dayCard).join("") ||
     `<div class="empty">Nessun allenamento registrato per ${escapeHtml(person.name)}.</div>`;
 }
@@ -243,12 +573,32 @@ function formatNumber(value) {
   return new Intl.NumberFormat("it-IT", { maximumFractionDigits:1 }).format(value || 0);
 }
 
+function hasRpe(workout) {
+  return workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "";
+}
+
+function rpeSummary(values) {
+  const unique = [...new Set(values.map((value) => Number(value)))].filter((value) => Number.isFinite(value));
+  if (!unique.length) return "";
+  if (unique.length === 1) {
+    const value = unique[0];
+    return `RPE ${value}${rpeLabels[value] ? ` - ${rpeLabels[value]}` : ""}`;
+  }
+  return `RPE ${unique.join(" / ")}`;
+}
+
+function dayRpeValue(day) {
+  const values = (day.rpes || []).map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 function groupWorkoutsByDay(workouts) {
   const groups = new Map();
   for (const workout of workouts) {
     if (!groups.has(workout.workout_date)) {
       groups.set(workout.workout_date, {
-        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], units:0
+        date:workout.workout_date, workouts:[], exercises:[], duration:0, notes:[], units:0, rpes:[]
       });
     }
     const day = groups.get(workout.workout_date);
@@ -256,6 +606,7 @@ function groupWorkoutsByDay(workouts) {
     day.exercises.push(...workout.exercises);
     day.duration += Number(workout.duration || 0);
     if (workout.notes) day.notes.push(workout.notes);
+    if (hasRpe(workout)) day.rpes.push(workout.rpe);
     day.units += workout.exercises.reduce((sum, exercise) => sum + exerciseUnits(exercise), 0);
   }
   return [...groups.values()].sort((a, b) => b.date.localeCompare(a.date));
@@ -263,6 +614,16 @@ function groupWorkoutsByDay(workouts) {
 
 function dayCard(day) {
   const bodyAreas = [...new Set(day.exercises.map((exercise) => exercise.body_area))];
+  const groupIds = day.workouts.map((workout) => workout.id).join(",");
+  const dayRpe = rpeSummary(day.rpes || []);
+  const sessionActions = groupIds ? `
+    <button type="button" class="session-edit" data-edit-workout-group="${escapeHtml(groupIds)}">
+      Modifica
+    </button>
+    <button type="button" class="session-edit whatsapp-button" data-rpe-whatsapp-group="${escapeHtml(groupIds)}">
+      Invia RPE
+    </button>
+  ` : "";
   const phaseOrder = ["warmup", "main", "cooldown"];
   const exerciseRows = phaseOrder.map((phase) => {
     const exercises = day.exercises.filter((exercise) => (exercise.phase || "main") === phase);
@@ -280,9 +641,17 @@ function dayCard(day) {
   }).join("");
   return `<article class="day-card">
     <div class="day-head">
-      <div><h3>${formatDate(day.date)}</h3><p>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"} · ${day.duration} minuti</p></div>
+      <div>
+        <h3>${formatDate(day.date)}</h3>
+        <p class="day-meta">
+          <span>${day.workouts.length} ${day.workouts.length === 1 ? "sessione" : "sessioni"}</span>
+          <span>${day.duration} minuti</span>
+          ${dayRpe ? `<span class="rpe-chip">${escapeHtml(dayRpe)}</span>` : ""}
+        </p>
+      </div>
       <div class="day-volume"><b>${formatNumber(day.units)}</b><span>unita totale</span></div>
     </div>
+    <div class="day-actions">${sessionActions}</div>
     <div class="day-areas">${bodyAreas.map((area) => `<span class="tag area-tag" data-area="${escapeHtml(area)}">${escapeHtml(area)}</span>`).join("")}</div>
     <div class="exercise-table">
       <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso / sec</span><span>Unita</span></div>
@@ -328,8 +697,58 @@ function progressChart(days) {
   </svg>`;
 }
 
+function rpeTrendChart(days) {
+  const points = [...days]
+    .reverse()
+    .map((day) => ({ ...day, rpeValue:dayRpeValue(day) }))
+    .filter((day) => day.rpeValue !== null)
+    .slice(-12);
+  if (!points.length) return `<div class="empty">Il grafico RPE comparira dopo la prima risposta.</div>`;
+  const width = 760;
+  const height = 230;
+  const padding = { left:45, right:20, top:25, bottom:38 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+  const coordinates = points.map((day, index) => ({
+    ...day,
+    x:padding.left + (points.length === 1 ? chartWidth / 2 : index * chartWidth / (points.length - 1)),
+    y:padding.top + chartHeight - (day.rpeValue / 10) * chartHeight
+  }));
+  const line = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
+  const area = `${coordinates[0].x},${padding.top + chartHeight} ${line} ${coordinates.at(-1).x},${padding.top + chartHeight}`;
+  const grid = [0, .25, .5, .75, 1].map((ratio) => {
+    const y = padding.top + chartHeight * ratio;
+    const value = 10 * (1 - ratio);
+    return `<line class="chart-grid" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>
+      <text class="chart-label" x="${padding.left - 8}" y="${y + 4}" text-anchor="end">${formatNumber(value)}</text>`;
+  }).join("");
+  const dateLabels = coordinates.map((point, index) => {
+    if (points.length > 7 && index % 2 && index !== points.length - 1) return "";
+    const label = new Intl.DateTimeFormat("it-IT", { day:"2-digit", month:"2-digit" }).format(new Date(`${point.date}T12:00:00`));
+    return `<text class="chart-label" x="${point.x}" y="${height - 12}" text-anchor="middle">${label}</text>`;
+  }).join("");
+  const dots = coordinates.map((point) => `<circle class="chart-dot rpe-chart-dot" cx="${point.x}" cy="${point.y}" r="5">
+    <title>${formatDate(point.date)}: RPE ${formatNumber(point.rpeValue)}</title>
+  </circle>`).join("");
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Grafico RPE nel tempo">
+    <defs><linearGradient id="rpeChartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#16a36f" stop-opacity=".24"/><stop offset="100%" stop-color="#16a36f" stop-opacity=".02"/></linearGradient></defs>
+    ${grid}<polygon class="chart-area rpe-chart-area" points="${area}"/><polyline class="chart-line rpe-chart-line" points="${line}"/>${dots}${dateLabels}
+  </svg>`;
+}
+
 async function load() {
   state.data = await request("/api/dashboard");
+  if (!Array.isArray(state.data.groups)) state.data.groups = [];
+  if (!Array.isArray(state.data.employees)) state.data.employees = [];
+  if (!state.data.employees.length) {
+    state.data.employees = [
+      { id:"default-leonardo", name:"Leonardo", color:"#ffcc05", role:"Personal trainer" },
+      { id:"default-michele", name:"Michele", color:"#32d1ff", role:"Personal trainer" },
+      { id:"default-giulia", name:"Giulia", color:"#ff6aa2", role:"Personal trainer" }
+    ];
+  }
+  if (!Array.isArray(state.data.templates)) state.data.templates = [];
+  if (!$("#template-rows").children.length) addTemplateRow();
   for (const item of state.data.catalog || []) {
     if (item.body_area === "Schiena") item.body_area = "Dorso";
   }
@@ -356,21 +775,28 @@ function switchView(view) {
   $(`#${view}-view`).classList.remove("hidden");
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   $("#page-title").textContent = {
-    dashboard:"Bentornato", history:"Il tuo diario", people:"Le persone", catalog:"I tuoi esercizi"
+    dashboard:"Bentornato", people:"Anagrafiche clienti", workouts:"Allenamenti", calendar:"Calendario", groups:"Gruppi",
+    employees:"Dipendenti", templates:"Schede di allenamento",
+    history:"Il tuo diario", catalog:"I tuoi esercizi"
   }[view];
   window.scrollTo({ top:0, behavior:"smooth" });
 }
 
+function phaseList(phase) {
+  return $(`[data-phase-list="${phaseLabels[phase] ? phase : "main"}"]`);
+}
+
 function addExercise(defaults = {}) {
   const row = $("#exercise-template").content.firstElementChild.cloneNode(true);
-  fillAreaSelect($(".body-area", row), defaults.bodyArea || "Petto");
-  $(".phase", row).value = defaults.phase || "main";
+  const phase = phaseLabels[defaults.phase] ? defaults.phase : "main";
+  $(".phase", row).value = phase;
+  fillAreaSelect($(".body-area", row), defaults.bodyArea || (phase === "main" ? "Petto" : "Altro"), phase);
   updateExerciseOptions(row, defaults.name);
   $(".sets", row).value = defaults.sets || "";
   $(".reps", row).value = defaults.reps || "";
   $(".weight", row).value = defaults.weight || "";
   $(".seconds", row).value = String(defaults.seconds || 0);
-  $("#exercise-list").append(row);
+  phaseList(phase).append(row);
 }
 
 function updateExerciseOptions(row, selectedName = "") {
@@ -405,12 +831,13 @@ function openWorkout(workout = null) {
   const form = $("#workout-form");
   form.reset();
   form.elements.id.value = workout?.id || "";
+  form.elements.groupIds.value = "";
   form.elements.personId.value = workout?.person_id || state.data.people[0]?.id || "";
   form.elements.date.value = workout?.workout_date || new Date().toISOString().slice(0, 10);
   form.elements.duration.value = workout?.duration || 45;
   form.elements.operator.value = workout?.operator || workout?.trainer || "";
   form.elements.rpe.value = workout?.rpe || 0;
-  $("#exercise-list").innerHTML = "";
+  $$("[data-phase-list]").forEach((list) => { list.innerHTML = ""; });
   const exercises = workout?.exercises?.length ? workout.exercises : [{ sets:3, reps:10, phase:"main" }];
   for (const exercise of exercises) {
     addExercise({
@@ -426,6 +853,22 @@ function openWorkout(workout = null) {
   $("#workout-dialog").showModal();
 }
 
+function openWorkoutGroup(workoutIds) {
+  const workouts = workoutIds
+    .map((id) => state.data.workouts.find((item) => item.id === Number(id)))
+    .filter(Boolean);
+  if (!workouts.length) return toast("Allenamento non trovato.");
+  const first = workouts[0];
+  openWorkout({
+    ...first,
+    duration:workouts.reduce((sum, workout) => sum + Number(workout.duration || 0), 0),
+    rpe:workouts.find((workout) => workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "")?.rpe ?? first.rpe ?? 0,
+    operator:workouts.find((workout) => workout.operator || workout.trainer)?.operator || first.operator || first.trainer || "",
+    exercises:workouts.flatMap((workout) => workout.exercises || [])
+  });
+  $("#workout-form").elements.groupIds.value = workoutIds.join(",");
+}
+
 function openPerson(person = null) {
   const form = $("#person-form");
   form.reset();
@@ -435,10 +878,76 @@ function openPerson(person = null) {
   form.elements.birthDate.value = person?.birth_date || "";
   form.elements.height.value = person?.height || "";
   form.elements.weight.value = person?.weight || "";
+  form.elements.phone.value = person?.phone || "";
+  form.elements.groupId.value = person?.group_id || 0;
   form.elements.notes.value = person?.notes || "";
   $("#person-dialog-title").textContent = person ? "Modifica persona" : "Aggiungi persona";
   $("#delete-person").classList.toggle("hidden", !person);
   $("#person-dialog").showModal();
+}
+
+function resetGroupForm() {
+  const form = $("#group-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.color.value = "#ffcc05";
+  $("#group-submit").textContent = "Salva gruppo";
+  $("#group-cancel-edit").classList.add("hidden");
+}
+
+function openGroupEdit(group) {
+  const form = $("#group-form");
+  form.elements.id.value = group.id;
+  form.elements.name.value = group.name || "";
+  form.elements.color.value = group.color || "#ffcc05";
+  form.elements.notes.value = group.notes || "";
+  $("#group-submit").textContent = "Salva modifiche";
+  $("#group-cancel-edit").classList.remove("hidden");
+  switchView("groups");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function resetEmployeeForm() {
+  const form = $("#employee-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.color.value = "#ffcc05";
+  $("#employee-submit").textContent = "Salva dipendente";
+  $("#employee-cancel-edit").classList.add("hidden");
+}
+
+function openEmployeeEdit(employee) {
+  const form = $("#employee-form");
+  form.elements.id.value = employee.id;
+  form.elements.name.value = employee.name || "";
+  form.elements.color.value = employee.color || "#ffcc05";
+  form.elements.role.value = employee.role || "";
+  $("#employee-submit").textContent = "Salva modifiche";
+  $("#employee-cancel-edit").classList.remove("hidden");
+  switchView("employees");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function resetTemplateForm() {
+  const form = $("#template-form");
+  form.reset();
+  form.elements.id.value = "";
+  $("#template-rows").innerHTML = "";
+  addTemplateRow();
+  $("#template-cancel-edit").classList.add("hidden");
+}
+
+function openTemplateEdit(template) {
+  const form = $("#template-form");
+  form.elements.id.value = template.id;
+  form.elements.title.value = template.title || "";
+  form.elements.personId.value = template.person_id || 0;
+  form.elements.notes.value = template.notes || "";
+  $("#template-rows").innerHTML = "";
+  (template.rows?.length ? template.rows : [{}]).forEach(addTemplateRow);
+  $("#template-cancel-edit").classList.remove("hidden");
+  switchView("templates");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
 document.addEventListener("click", async (event) => {
@@ -453,7 +962,7 @@ document.addEventListener("click", async (event) => {
     state.historyPersonId = null;
     renderHistory();
   }
-  if (event.target.closest("#new-workout,#mobile-new")) openWorkout();
+  if (event.target.closest("#new-workout")) openWorkout();
   if (event.target.closest("#new-person")) openPerson();
   if (event.target.closest("#new-catalog-exercise")) {
     if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
@@ -461,13 +970,103 @@ document.addEventListener("click", async (event) => {
     $("#catalog-custom-area-wrap").classList.add("hidden");
     $("#catalog-dialog").showModal();
   }
+  const personHistoryCard = event.target.closest("[data-open-person-history]");
+  if (personHistoryCard && !event.target.closest("[data-edit-person]")) {
+    state.historyPersonId = Number(personHistoryCard.dataset.openPersonHistory);
+    switchView("history");
+    renderHistory();
+  }
   const personCard = event.target.closest("[data-edit-person]");
   if (personCard) {
+    event.stopPropagation();
     const person = state.data.people.find((item) => item.id === Number(personCard.dataset.editPerson));
     if (person) openPerson(person);
   }
   if (event.target.matches(".close")) event.target.closest("dialog").close();
-  if (event.target.matches("#add-exercise")) addExercise({ sets:3, reps:10, phase:"main" });
+  const calendarDay = event.target.closest("[data-calendar-day]");
+  if (calendarDay) {
+    openDayDialog(calendarDay.dataset.calendarDay);
+  }
+  const workoutPerson = event.target.closest("[data-workout-person]");
+  if (workoutPerson) {
+    state.workoutPersonId = Number(workoutPerson.dataset.workoutPerson);
+    renderWorkoutsView();
+  }
+  if (event.target.closest("#workout-person-back")) {
+    state.workoutPersonId = null;
+    renderWorkoutsView();
+  }
+  const openGroup = event.target.closest("[data-open-group]");
+  if (openGroup && !event.target.closest("button")) {
+    state.groupDetailId = Number(openGroup.dataset.openGroup);
+    renderGroups();
+  }
+  if (event.target.closest("#group-detail-back")) {
+    state.groupDetailId = null;
+    renderGroups();
+  }
+  const editGroupButton = event.target.closest("[data-edit-group]");
+  if (editGroupButton) {
+    const group = (state.data.groups || []).find((item) => item.id === Number(editGroupButton.dataset.editGroup));
+    if (group) openGroupEdit(group);
+  }
+  const deleteGroupButton = event.target.closest("[data-delete-group]");
+  if (deleteGroupButton && confirm("Eliminare questo gruppo? Le persone resteranno in anagrafica senza gruppo.")) {
+    try {
+      await request(`/api/groups/${deleteGroupButton.dataset.deleteGroup}`, { method:"DELETE" });
+      resetGroupForm();
+      await load();
+      toast("Gruppo eliminato.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+  const editEmployeeButton = event.target.closest("[data-edit-employee]");
+  if (editEmployeeButton) {
+    const employee = (state.data.employees || []).find((item) => String(item.id) === String(editEmployeeButton.dataset.editEmployee));
+    if (employee && !String(employee.id).startsWith("default-")) openEmployeeEdit(employee);
+    else toast("Salva il dipendente in anagrafica per modificarlo.");
+  }
+  const deleteEmployeeButton = event.target.closest("[data-delete-employee]");
+  if (deleteEmployeeButton && confirm("Eliminare questo dipendente? Gli appuntamenti gia inseriti resteranno invariati.")) {
+    try {
+      await request(`/api/employees/${deleteEmployeeButton.dataset.deleteEmployee}`, { method:"DELETE" });
+      resetEmployeeForm();
+      await load();
+      toast("Dipendente eliminato.");
+    } catch (error) { toast(error.message); }
+  }
+  const editTemplateButton = event.target.closest("[data-edit-template]");
+  if (editTemplateButton) {
+    const template = (state.data.templates || []).find((item) => item.id === Number(editTemplateButton.dataset.editTemplate));
+    if (template) openTemplateEdit(template);
+  }
+  const templateWhatsappButton = event.target.closest("[data-template-whatsapp]");
+  if (templateWhatsappButton) {
+    const template = (state.data.templates || []).find((item) => item.id === Number(templateWhatsappButton.dataset.templateWhatsapp));
+    if (template) {
+      const url = templateWhatsappUrl(template);
+      if (!url) return toast("Associa la scheda a una persona con telefono WhatsApp.");
+      window.open(url, "_blank", "noopener");
+      toast("WhatsApp aperto con la scheda.");
+    }
+  }
+  const deleteTemplateButton = event.target.closest("[data-delete-template]");
+  if (deleteTemplateButton && confirm("Eliminare questa scheda?")) {
+    try {
+      await request(`/api/templates/${deleteTemplateButton.dataset.deleteTemplate}`, { method:"DELETE" });
+      resetTemplateForm();
+      await load();
+      toast("Scheda eliminata.");
+    } catch (error) { toast(error.message); }
+  }
+  if (event.target.closest("#add-template-row")) addTemplateRow();
+  if (event.target.matches(".remove-template-row")) {
+    if ($$(".template-row").length > 1) event.target.closest(".template-row").remove();
+    else toast("Serve almeno una riga.");
+  }
+  const phaseAddButton = event.target.closest("[data-add-phase]");
+  if (phaseAddButton) addExercise({ sets:3, reps:10, phase:phaseAddButton.dataset.addPhase });
   if (event.target.matches(".remove-exercise")) {
     if ($$(".exercise-row").length > 1) event.target.closest(".exercise-row").remove();
     else toast("Serve almeno un esercizio.");
@@ -476,6 +1075,60 @@ document.addEventListener("click", async (event) => {
   if (editWorkoutButton) {
     const workout = state.data.workouts.find((item) => item.id === Number(editWorkoutButton.dataset.editWorkout));
     if (workout) openWorkout(workout);
+  }
+  const editWorkoutGroupButton = event.target.closest("[data-edit-workout-group]");
+  if (editWorkoutGroupButton) {
+    openWorkoutGroup(editWorkoutGroupButton.dataset.editWorkoutGroup.split(",").map(Number));
+  }
+  const rpeWhatsappButton = event.target.closest("[data-rpe-whatsapp]");
+  if (rpeWhatsappButton) {
+    try {
+      const data = await request(`/api/workouts/${rpeWhatsappButton.dataset.rpeWhatsapp}/rpe-link`, { method:"POST" });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il messaggio RPE.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+  const rpeWhatsappGroupButton = event.target.closest("[data-rpe-whatsapp-group]");
+  if (rpeWhatsappGroupButton) {
+    try {
+      const workoutIds = rpeWhatsappGroupButton.dataset.rpeWhatsappGroup.split(",").map(Number).filter(Boolean);
+      const data = await request("/api/workout-groups/rpe-link", {
+        method:"POST",
+        body:JSON.stringify({ workoutIds })
+      });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il messaggio RPE della sessione.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
+  const scheduleEditButton = event.target.closest("[data-edit-schedule]");
+  if (scheduleEditButton) {
+    const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleEditButton.dataset.editSchedule));
+    if (item) openScheduleEdit(item);
+  }
+  const scheduleReminderButton = event.target.closest("[data-schedule-reminder]");
+  if (scheduleReminderButton) {
+    const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleReminderButton.dataset.scheduleReminder));
+    if (item) {
+      const text = scheduleReminderText(item);
+      const url = whatsappReminderUrl(item, text);
+      if (!url) return toast("Inserisci il telefono WhatsApp nella scheda della persona.");
+      window.open(url, "_blank", "noopener");
+      toast("WhatsApp aperto con il promemoria.");
+    }
+  }
+  const scheduleDeleteButton = event.target.closest("[data-delete-schedule]");
+  if (scheduleDeleteButton && confirm("Eliminare questo appuntamento dall'agenda?")) {
+    try {
+      await request(`/api/schedule/${scheduleDeleteButton.dataset.deleteSchedule}`, { method:"DELETE" });
+      await load();
+      toast("Appuntamento eliminato.");
+    } catch (error) {
+      toast(error.message);
+    }
   }
   const deleteButton = event.target.closest("[data-delete]");
   if (deleteButton && confirm("Eliminare questo allenamento?")) {
@@ -495,7 +1148,7 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-edit-person]")) {
+  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-open-person-history]")) {
     event.preventDefault();
     event.target.click();
   }
@@ -509,8 +1162,50 @@ document.addEventListener("change", (event) => {
 });
 
 $("#catalog-filter").addEventListener("change", renderCatalog);
+$("#people-search").addEventListener("input", (event) => {
+  state.peopleSearch = event.target.value;
+  render();
+});
+$("#schedule-date").addEventListener("change", (event) => {
+  state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
+  renderSchedule();
+});
+$("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
+$("#group-cancel-edit").addEventListener("click", resetGroupForm);
+$("#employee-cancel-edit").addEventListener("click", resetEmployeeForm);
+$("#template-cancel-edit").addEventListener("click", resetTemplateForm);
 $("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
   $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
+});
+$("#schedule-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (!state.data.people.length) return toast("Aggiungi prima una persona.");
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/schedule/${id}` : "/api/schedule", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({
+        personId:Number(form.get("personId")),
+        trainer:form.get("trainer"),
+        date:form.get("date") || state.scheduleDate,
+        time:form.get("time"),
+        notes:""
+      })
+    });
+    resetScheduleForm();
+    await load();
+    toast(id ? "Appuntamento aggiornato." : "Appuntamento aggiunto in agenda.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 $("#workout-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -532,12 +1227,15 @@ $("#workout-form").addEventListener("submit", async (event) => {
   }));
   try {
     const id = form.get("id");
-    await request(id ? `/api/workouts/${id}` : "/api/workouts", {
-      method:id ? "PUT" : "POST",
+    const groupIds = String(form.get("groupIds") || "").split(",").map((item) => Number(item)).filter(Boolean);
+    const url = groupIds.length ? "/api/workout-groups" : id ? `/api/workouts/${id}` : "/api/workouts";
+    const method = groupIds.length || id ? "PUT" : "POST";
+    await request(url, {
+      method,
       body:JSON.stringify({
         personId:Number(form.get("personId")), date:form.get("date"),
         duration:Number(form.get("duration")), operator:form.get("operator"),
-        rpe:Number(form.get("rpe")), notes:"", exercises
+        rpe:Number(form.get("rpe")), notes:"", workoutIds:groupIds, exercises
       })
     });
     $("#workout-dialog").close();
@@ -564,7 +1262,8 @@ $("#person-form").addEventListener("submit", async (event) => {
       method:id ? "PUT" : "POST",
       body:JSON.stringify({
         name:form.get("name"), color:form.get("color"), birthDate:form.get("birthDate"),
-        height:form.get("height"), weight:form.get("weight"), notes:form.get("notes")
+        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"),
+        groupId:Number(form.get("groupId")), notes:form.get("notes")
       })
     });
     $("#person-dialog").close();
@@ -590,6 +1289,87 @@ $("#delete-person").addEventListener("click", async () => {
     await load();
     toast("Persona eliminata.");
   } catch (error) { toast(error.message); }
+});
+
+$("#group-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/groups/${id}` : "/api/groups", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ name:form.get("name"), color:form.get("color"), notes:form.get("notes") })
+    });
+    resetGroupForm();
+    await load();
+    toast(id ? "Gruppo aggiornato." : "Gruppo creato.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
+});
+
+$("#employee-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/employees/${id}` : "/api/employees", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ name:form.get("name"), color:form.get("color"), role:form.get("role") })
+    });
+    resetEmployeeForm();
+    await load();
+    toast(id ? "Dipendente aggiornato." : "Dipendente creato.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
+});
+
+$("#template-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  const rows = $$(".template-row").map((row) => ({
+    block:$(".template-block", row).value,
+    exercise:$(".template-exercise", row).value,
+    sets:$(".template-sets", row).value,
+    reps:$(".template-reps", row).value,
+    rest:$(".template-rest", row).value,
+    notes:$(".template-notes", row).value,
+    weeks:$(".template-weeks", row).value
+  }));
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/templates/${id}` : "/api/templates", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ title:form.get("title"), personId:Number(form.get("personId")), notes:form.get("notes"), rows })
+    });
+    resetTemplateForm();
+    await load();
+    toast(id ? "Scheda aggiornata." : "Scheda creata.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 
 $("#catalog-form").addEventListener("submit", async (event) => {
@@ -721,8 +1501,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v15")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v15", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v37")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v37", "1");
     window.location.reload();
   });
 }

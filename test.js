@@ -234,6 +234,10 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(server, /function normalizeEmployee/);
   assert.match(server, /function normalizeTemplate/);
   assert.match(server, /function templateSheetHtml/);
+  assert.match(server, /print-color-adjust:exact/);
+  assert.match(server, /size:A4 landscape/);
+  assert.match(server, /width:281mm/);
+  assert.match(server, /overflow:visible/);
   assert.match(server, /share-link/);
   assert.match(server, /serveTemplateSheet/);
   assert.match(server, /\/template\//);
@@ -381,7 +385,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v31/);
+  assert.match(worker, /fittrack-shell-v32/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

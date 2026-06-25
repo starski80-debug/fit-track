@@ -338,6 +338,7 @@ function templateSheetHtml(template) {
   <title>Formae - Scheda allenamento</title>
   <style>
     :root { color-scheme:light; font-family:Arial,Helvetica,sans-serif; --yellow:#ffcc05; --dark:#202020; --grid:#111; }
+    * { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     body { margin:0; background:#d9e1ed; color:#050505; }
     .wrap { max-width:1280px; margin:0 auto; padding:20px; }
     .toolbar { display:flex; justify-content:flex-end; gap:10px; margin:0 0 12px; }
@@ -367,12 +368,27 @@ function templateSheetHtml(template) {
       button { width:100%; }
     }
     @media print {
-      body { background:#fff; }
-      .wrap { max-width:none; padding:0; }
+      html,body { width:297mm; margin:0; background:#fff; }
+      .wrap { width:281mm; max-width:none; margin:0 auto; padding:0; }
       .toolbar { display:none; }
-      .sheet { box-shadow:none; border:0; overflow:visible; }
-      table { min-width:0; }
-      @page { size:landscape; margin:8mm; }
+      .sheet { width:100%; box-shadow:none; border:2px solid var(--grid); overflow:visible; break-inside:avoid; page-break-inside:avoid; }
+      .brand { padding:8px 8px 12px; }
+      .brand h1 { font-size:24px; }
+      .brand h2 { margin-top:5px; font-size:13px; }
+      .meta { padding:6px 8px; gap:6px 14px; font-size:9px; }
+      table { width:100%; min-width:0; table-layout:fixed; }
+      th { padding:5px 3px; font-size:8px; line-height:1.05; }
+      td { padding:5px 3px; min-height:0; font-size:8px; line-height:1.12; overflow-wrap:anywhere; word-break:break-word; }
+      td.exercise { font-size:8.5px; }
+      td.notes { font-size:7.5px; line-height:1.12; }
+      .block { width:4%; font-size:9px; }
+      .exercise { width:16%; }
+      .sets { width:6%; }
+      .reps { width:8%; }
+      .rest { width:8%; }
+      .notes { width:19%; }
+      .week { width:5.55%; }
+      @page { size:A4 landscape; margin:8mm; }
     }
   </style>
 </head>

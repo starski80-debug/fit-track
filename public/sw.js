@@ -1,8 +1,8 @@
-const CACHE_NAME = "fittrack-shell-v31";
+const CACHE_NAME = "fittrack-shell-v32";
 const STATIC_ASSETS = [
-  "/?pwa=41",
-  "/style.css?v=41",
-  "/app.js?v=41",
+  "/?pwa=42",
+  "/style.css?v=42",
+  "/app.js?v=42",
   "/manifest.webmanifest",
   "/brand/formae-banner.png",
   "/brand/formae-mark.png",
@@ -48,7 +48,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => response.ok ? response : Promise.reject(new Error("offline")))
-        .catch(() => caches.match("/?pwa=41"))
+        .catch(() => caches.match("/?pwa=42"))
     );
     return;
   }

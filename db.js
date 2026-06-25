@@ -87,6 +87,7 @@ function createSqliteStore() {
       trainer TEXT NOT NULL DEFAULT '',
       notes TEXT NOT NULL DEFAULT '',
       status TEXT NOT NULL DEFAULT 'scheduled',
+      response_token TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
@@ -121,6 +122,12 @@ function createSqliteStore() {
   `);
   if (workoutColumns.includes("operator") && !workoutColumns.includes("trainer")) {
     db.exec("UPDATE workouts SET trainer = operator WHERE trainer = '' AND operator <> ''");
+  }
+  const scheduleColumns = db.prepare("PRAGMA table_info(scheduled_sessions)").all().map((item) => item.name);
+  for (const [name, definition] of [
+    ["response_token", "TEXT NOT NULL DEFAULT ''"]
+  ]) {
+    if (!scheduleColumns.includes(name)) db.exec(`ALTER TABLE scheduled_sessions ADD COLUMN ${name} ${definition}`);
   }
 
   return {
@@ -211,6 +218,22 @@ function createSqliteStore() {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
     async deleteCatalog(id) { return db.prepare("DELETE FROM exercise_catalog WHERE id=?").run(id).changes > 0; },
+    async renameBodyArea(oldName, newName) {
+      if (oldName === newName) return true;
+      db.exec("BEGIN");
+      try {
+        const names = db.prepare("SELECT name FROM exercise_catalog WHERE body_area=?").all(oldName);
+        const insert = db.prepare("INSERT OR IGNORE INTO exercise_catalog (body_area, name) VALUES (?, ?)");
+        for (const item of names) insert.run(newName, item.name);
+        db.prepare("DELETE FROM exercise_catalog WHERE body_area=?").run(oldName);
+        db.prepare("UPDATE exercises SET body_area=? WHERE body_area=?").run(newName, oldName);
+        db.exec("COMMIT");
+        return true;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    },
     async addSchedule(body) {
       return Number(db.prepare(`
         INSERT INTO scheduled_sessions (person_id, scheduled_date, scheduled_time, trainer, notes, status)
@@ -226,6 +249,24 @@ function createSqliteStore() {
     },
     async deleteSchedule(id) {
       return db.prepare("DELETE FROM scheduled_sessions WHERE id=?").run(id).changes > 0;
+    },
+    async prepareScheduleResponseLink(id, token) {
+      db.prepare("UPDATE scheduled_sessions SET response_token=CASE WHEN response_token = '' THEN ? ELSE response_token END WHERE id=?").run(token, id);
+      return db.prepare(`
+        SELECT s.*, p.name AS person_name, p.phone AS person_phone
+        FROM scheduled_sessions s JOIN people p ON p.id = s.person_id
+        WHERE s.id=?
+      `).get(id) || null;
+    },
+    async scheduleByResponseToken(token) {
+      return db.prepare(`
+        SELECT s.*, p.name AS person_name
+        FROM scheduled_sessions s JOIN people p ON p.id = s.person_id
+        WHERE s.response_token=?
+      `).get(token) || null;
+    },
+    async setScheduleStatusByToken(token, status) {
+      return db.prepare("UPDATE scheduled_sessions SET status=? WHERE response_token=?").run(status, token).changes > 0;
     },
     async addWorkout(body) {
       db.exec("BEGIN");
@@ -421,6 +462,7 @@ function createPostgresStore() {
           trainer TEXT NOT NULL DEFAULT '',
           notes TEXT NOT NULL DEFAULT '',
           status TEXT NOT NULL DEFAULT 'scheduled',
+          response_token TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date TEXT NOT NULL DEFAULT '';
@@ -434,6 +476,7 @@ function createPostgresStore() {
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe_token TEXT NOT NULL DEFAULT '';
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'main';
+        ALTER TABLE scheduled_sessions ADD COLUMN IF NOT EXISTS response_token TEXT NOT NULL DEFAULT '';
         DO $$
         BEGIN
           IF EXISTS (
@@ -585,6 +628,27 @@ function createPostgresStore() {
       const result = await query("DELETE FROM exercise_catalog WHERE id=$1", [id]);
       return result.rowCount > 0;
     },
+    async renameBodyArea(oldName, newName) {
+      if (oldName === newName) return true;
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(`
+          INSERT INTO exercise_catalog (body_area, name)
+          SELECT $2, name FROM exercise_catalog WHERE body_area=$1
+          ON CONFLICT (body_area, name) DO NOTHING
+        `, [oldName, newName]);
+        await client.query("DELETE FROM exercise_catalog WHERE body_area=$1", [oldName]);
+        await client.query("UPDATE exercises SET body_area=$2 WHERE body_area=$1", [oldName, newName]);
+        await client.query("COMMIT");
+        return true;
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      } finally {
+        client.release();
+      }
+    },
     async addSchedule(body) {
       const result = await query(`
         INSERT INTO scheduled_sessions (person_id,scheduled_date,scheduled_time,trainer,notes,status)
@@ -602,6 +666,27 @@ function createPostgresStore() {
     },
     async deleteSchedule(id) {
       const result = await query("DELETE FROM scheduled_sessions WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
+    async prepareScheduleResponseLink(id, token) {
+      await query("UPDATE scheduled_sessions SET response_token=CASE WHEN response_token = '' THEN $1 ELSE response_token END WHERE id=$2", [token, id]);
+      const result = await query(`
+        SELECT s.*, p.name AS person_name, p.phone AS person_phone
+        FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
+        WHERE s.id=$1
+      `, [id]);
+      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id), person_id:Number(result.rows[0].person_id) } : null;
+    },
+    async scheduleByResponseToken(token) {
+      const result = await query(`
+        SELECT s.*, p.name AS person_name
+        FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
+        WHERE s.response_token=$1
+      `, [token]);
+      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id), person_id:Number(result.rows[0].person_id) } : null;
+    },
+    async setScheduleStatusByToken(token, status) {
+      const result = await query("UPDATE scheduled_sessions SET status=$1 WHERE response_token=$2", [status, token]);
       return result.rowCount > 0;
     },
     async addWorkout(body) {

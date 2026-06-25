@@ -62,6 +62,9 @@ h2 { margin-bottom:0; }
 .schedule-body h3 { margin:0 0 4px; font-size:15px; }
 .schedule-body p { margin:0; color:var(--muted); font-size:12px; font-weight:700; }
 .schedule-body span { display:inline-block; margin-top:7px; color:var(--muted); font-size:12px; }
+.schedule-status { display:inline-flex; margin:0 0 0 7px; vertical-align:middle; border-radius:999px; padding:4px 8px; background:#fff6d1; color:#8c6800; font-size:11px; font-weight:900; }
+.schedule-item.status-confirmed .schedule-status { background:#e7f8ef; color:#16764d; }
+.schedule-item.status-cancelled .schedule-status { background:#fff0f2; color:#c8435b; }
 .schedule-item-actions { display:flex; gap:7px; }
 .schedule-reminder,.schedule-edit,.schedule-delete { border:0; border-radius:10px; padding:9px 10px; font-size:12px; font-weight:800; }
 .schedule-reminder { background:#eaf8f1; color:#147250; }
@@ -174,6 +177,18 @@ h2 { margin-bottom:0; }
 .calendar-day strong { font-size:18px; }
 .calendar-day span { min-height:15px; color:var(--muted); font-size:11px; font-weight:800; }
 .calendar-day.has-items span { color:#111827; }
+.calendar-day .calendar-status {
+  display:block;
+  width:100%;
+  min-height:14px;
+  margin-top:-3px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:inherit;
+  font-size:10px;
+  font-weight:900;
+}
 .calendar-colors { display:flex; flex-wrap:wrap; gap:4px; }
 .calendar-colors i { display:none; }
 .day-dialog-content {
@@ -441,8 +456,11 @@ h2 { margin-bottom:0; }
 .catalog-toolbar p { color:var(--muted); font-size:13px; margin:0; }
 .catalog-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:15px; }
 .catalog-group { background:#fff; border:1px solid var(--line); border-radius:18px; padding:20px; }
-.catalog-group h3 { display:flex; justify-content:space-between; margin-bottom:14px; font-size:16px; }
-.catalog-group h3 span { color:var(--muted); font-size:12px; font-weight:600; }
+.catalog-group-head { display:flex; align-items:start; justify-content:space-between; gap:12px; margin-bottom:14px; }
+.catalog-group-head h3 { margin:0 0 3px; font-size:16px; }
+.catalog-group-head span { color:var(--muted); font-size:12px; font-weight:700; }
+.area-edit { border:0; border-radius:10px; padding:8px 10px; background:#fff6d1; color:#8c6800; font-size:12px; font-weight:900; white-space:nowrap; }
+.area-edit:hover { background:#ffcc05; color:#111827; }
 .catalog-list { display:grid; gap:7px; }
 .catalog-item { display:flex; align-items:center; justify-content:space-between; gap:10px; background:#f7f7fb; border-radius:10px; padding:9px 11px; font-size:13px; }
 .catalog-delete { border:0; background:transparent; color:#d45b70; font-size:12px; padding:3px; }
@@ -514,12 +532,12 @@ input:focus,select:focus { border-color:var(--accent); box-shadow:0 0 0 3px #6c6
 
 /* Visual refresh */
 :root {
-  --bg:#f3f5f9;
+  --bg:#d9e1ed;
   --surface:#ffffff;
-  --surface-soft:#f8f9fc;
+  --surface-soft:#f1f5fb;
   --ink:#172033;
   --muted:#7b8498;
-  --line:#e6e9f0;
+  --line:#d5deea;
   --accent:#6657e8;
   --accent-strong:#5142d3;
   --accent-soft:#eeecff;
@@ -530,8 +548,8 @@ html { scroll-behavior:smooth; }
 body {
   min-height:100vh;
   background:
-    radial-gradient(circle at 75% 0%,rgba(102,87,232,.08),transparent 28rem),
-    var(--bg);
+    radial-gradient(circle at 75% 0%,rgba(255,204,5,.12),transparent 28rem),
+    linear-gradient(145deg,#e2e8f1 0%,#c9d4e2 100%);
   letter-spacing:-.01em;
 }
 button,.person-card,.history-person,.stat,.workout-card,.catalog-group,.day-card { transition:.2s ease; }
@@ -776,7 +794,7 @@ h1 { font-size:29px; letter-spacing:-.04em; }
 .exercise-detail { min-height:48px; }
 .catalog-info { background:linear-gradient(100deg,var(--accent-soft),#f5f3ff); border:1px solid #ded9ff; }
 .catalog-group { border-radius:19px; }
-.catalog-group h3:before {
+.catalog-group-head h3:before {
   content:"";
   display:inline-block;
   width:9px;
@@ -786,6 +804,7 @@ h1 { font-size:29px; letter-spacing:-.04em; }
   background:var(--accent);
   box-shadow:0 0 0 5px var(--accent-soft);
 }
+.catalog-group-head h3 { display:flex; align-items:center; }
 .catalog-item { background:var(--surface-soft); border:1px solid transparent; }
 .catalog-item:hover { border-color:var(--line); background:var(--surface); }
 input,select {
@@ -850,6 +869,8 @@ dialog form { padding:30px; }
 [data-theme="dark"] .day-card,
 [data-theme="dark"] .catalog-group { border-color:var(--line); }
 [data-theme="dark"] .catalog-info { border-color:#39345f; background:#24223e; color:#bbb2ff; }
+[data-theme="dark"] .area-edit { background:rgba(255,204,5,.14); color:#ffda46; }
+[data-theme="dark"] .area-edit:hover { background:#ffcc05; color:#111827; }
 [data-theme="dark"] .area-tag[data-area="Petto"] { background:#41242c; color:#ff9dac; }
 [data-theme="dark"] .area-tag[data-area="Dorso"] { background:#19344b; color:#86c5ff; }
 [data-theme="dark"] .area-tag[data-area="Spalle"] { background:#302650; color:#bba2ff; }

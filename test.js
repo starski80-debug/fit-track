@@ -34,13 +34,21 @@ test("il catalogo contiene esercizi per tutte le zone", () => {
 
 test("la gestione del catalogo e presente", () => {
   const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
+  const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
   const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
   const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
   assert.match(html, /Catalogo esercizi/);
   assert.match(html, /data-go="catalog"/);
   assert.match(html, /catalog-form/);
+  assert.match(html, /area-form/);
+  assert.match(app, /data-edit-area/);
+  assert.match(app, /function openAreaEdit/);
+  assert.match(app, /function fillCatalogAreaSelect/);
+  assert.match(app, /function recoveryBodyAreaName/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS exercise_catalog/);
+  assert.match(database, /async renameBodyArea/);
   assert.match(server, /POST" && url\.pathname === "\/api\/catalog"/);
+  assert.match(server, /PUT" && url\.pathname === "\/api\/body-areas"/);
 });
 
 test("le persone possono essere modificate", () => {
@@ -108,6 +116,10 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(app, /data-schedule-reminder/);
   assert.match(app, /function whatsappReminderUrl/);
   assert.match(app, /function scheduleReminderText/);
+  assert.match(app, /function scheduleStatusLabel/);
+  assert.match(app, /function scheduleStatusSummary/);
+  assert.match(app, /schedule-status/);
+  assert.match(app, /\/api\/schedule\/\$\{scheduleReminderButton\.dataset\.scheduleReminder\}\/reminder-link/);
   assert.doesNotMatch(app, /formaeLogoUrl/);
   assert.match(app, /wa\.me/);
   assert.match(app, /function openScheduleEdit/);
@@ -117,15 +129,24 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(app, /method:id \? "PUT" : "POST"/);
   assert.match(app, /\/api\/schedule/);
   assert.match(server, /function normalizeSchedule/);
+  assert.match(server, /function appointmentHtml/);
+  assert.match(server, /function scheduleStatusLabel/);
   assert.match(server, /POST" && url\.pathname === "\/api\/schedule"/);
+  assert.match(server, /reminder-link/);
+  assert.match(server, /\/api\/appointment\//);
+  assert.match(server, /serveAppointmentPage/);
   assert.match(server, /req\.method === "PUT" && scheduleMatch/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS scheduled_sessions/);
+  assert.match(database, /response_token TEXT NOT NULL DEFAULT ''/);
   assert.match(database, /async addSchedule/);
   assert.match(database, /async updateSchedule/);
+  assert.match(database, /async prepareScheduleResponseLink/);
+  assert.match(database, /async setScheduleStatusByToken/);
   assert.match(css, /schedule-panel/);
   assert.match(css, /calendar-days/);
   assert.match(css, /has-items/);
   assert.match(css, /trainer-color/);
+  assert.match(css, /schedule-status/);
   assert.match(css, /schedule-reminders/);
 });
 
@@ -224,6 +245,8 @@ test("il nuovo design include tema scuro e colori per zone", () => {
   assert.match(html, /theme-toggle/);
   assert.match(app, /fittrack-theme/);
   assert.match(css, /\[data-theme="dark"\]/);
+  assert.match(css, /linear-gradient\(145deg,#e2e8f1 0%,#c9d4e2 100%\)/);
+  assert.match(css, /area-edit/);
   assert.match(css, /data-area="Petto"/);
   assert.match(css, /@media \(max-width:570px\)/);
 });
@@ -350,7 +373,8 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v28/);
+  assert.match(worker, /fittrack-shell-v30/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);
   assert.match(worker, /brand\/formae-mark\.png/);
 });

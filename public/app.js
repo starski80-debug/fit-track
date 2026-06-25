@@ -51,8 +51,9 @@ const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => (
 })[char]);
 
 function bodyAreaList() {
-  const names = new Set(Object.keys(defaultExerciseCatalog));
-  for (const item of state.data?.catalog || []) names.add(item.body_area);
+  const catalog = state.data?.catalog || [];
+  const names = new Set(catalog.length ? [] : Object.keys(defaultExerciseCatalog));
+  for (const item of catalog) names.add(item.body_area);
   for (const workout of state.data?.workouts || []) {
     for (const exercise of workout.exercises || []) names.add(exercise.body_area);
   }
@@ -63,10 +64,20 @@ function groupById(id) {
   return (state.data?.groups || []).find((group) => group.id === Number(id)) || null;
 }
 
+function recoveryBodyAreaName(areaNames) {
+  if (areaNames.includes("Altro")) return "Altro";
+  const recoveryItem = (state.data?.catalog || []).find((item) =>
+    /mobil|stretch|riscal|defatic|cool|warm|recuper/i.test(`${item.body_area} ${item.name}`)
+  );
+  if (recoveryItem?.body_area) return recoveryItem.body_area;
+  return areaNames[0] || "Altro";
+}
+
 function bodyAreasForPhase(phase, selected = "") {
   const areas = bodyAreaList();
-  if (phase === "warmup" || phase === "cooldown") return ["Altro"];
-  const filtered = areas.filter((area) => area !== "Altro");
+  const recoveryArea = recoveryBodyAreaName(areas);
+  if (phase === "warmup" || phase === "cooldown") return [recoveryArea];
+  const filtered = areas.filter((area) => area !== "Altro" && area !== recoveryArea);
   if (selected && selected !== "Altro" && !filtered.includes(selected)) filtered.push(selected);
   return filtered.length ? filtered : areas;
 }
@@ -76,6 +87,17 @@ function fillAreaSelect(select, selected = "", phase = "main") {
   const current = selected || select.value || options[0] || "Altro";
   select.innerHTML = options.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
   select.value = options.includes(current) ? current : options[0] || "Altro";
+}
+
+function fillCatalogAreaSelect(selected = "") {
+  const select = $("#catalog-form [name=bodyArea]");
+  const options = bodyAreaList();
+  const current = selected || select.value;
+  select.innerHTML = [
+    ...options.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`),
+    `<option value="__custom__">Nuova macro area...</option>`
+  ].join("");
+  select.value = options.includes(current) ? current : options[0] || "__custom__";
 }
 
 function toast(message) {
@@ -167,6 +189,29 @@ function scheduleReminderText(item) {
   return `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!${formaeWhatsappSignature()}`;
 }
 
+function scheduleStatusLabel(status = "scheduled") {
+  return {
+    scheduled:"In attesa",
+    confirmed:"Confermato",
+    cancelled:"Annullato",
+    done:"Svolto"
+  }[status] || "In attesa";
+}
+
+function scheduleStatusSummary(items) {
+  const counts = items.reduce((map, item) => {
+    const key = item.status || "scheduled";
+    map[key] = (map[key] || 0) + 1;
+    return map;
+  }, {});
+  if (items.length === 1) return scheduleStatusLabel(items[0].status);
+  return [
+    counts.confirmed ? `${counts.confirmed} conf.` : "",
+    counts.scheduled ? `${counts.scheduled} att.` : "",
+    counts.cancelled ? `${counts.cancelled} ann.` : ""
+  ].filter(Boolean).join(" · ");
+}
+
 function trainerColor(name = "") {
   const employee = (state.data?.employees || []).find((item) => item.name === name);
   return employee?.color || { Leonardo:"#ffcc05", Michele:"#32d1ff", Giulia:"#ff6aa2" }[name] || "#6c63ff";
@@ -174,11 +219,12 @@ function trainerColor(name = "") {
 
 function scheduleCard(item) {
   const reminderText = scheduleReminderText(item);
-  return `<article class="schedule-item" style="--trainer-color:${escapeHtml(trainerColor(item.trainer))}">
+  const status = item.status || "scheduled";
+  return `<article class="schedule-item status-${escapeHtml(status)}" style="--trainer-color:${escapeHtml(trainerColor(item.trainer))}">
     <div class="schedule-time">${escapeHtml(item.scheduled_time || "--:--")}</div>
     <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
     <div class="schedule-body">
-      <h3>${escapeHtml(item.person_name)}</h3>
+      <h3>${escapeHtml(item.person_name)} <span class="schedule-status">${escapeHtml(scheduleStatusLabel(status))}</span></h3>
       <p>${formatDate(item.scheduled_date)} · PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
       ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
     </div>
@@ -282,6 +328,7 @@ function renderCalendarGrid() {
     cells.push(`<button type="button" class="calendar-day ${items.length ? "has-items" : ""} ${date === state.scheduleDate ? "active" : ""}" data-calendar-day="${date}" style="${fill ? `--day-fill:${escapeHtml(fill)}` : ""}">
       <strong>${day}</strong>
       <span>${items.length ? `${items.length} app.` : ""}</span>
+      ${items.length ? `<small class="calendar-status">${escapeHtml(scheduleStatusSummary(items))}</small>` : ""}
       <div class="calendar-colors">${colors.map((color) => `<i style="background:${escapeHtml(color)}"></i>`).join("")}</div>
     </button>`);
   }
@@ -371,6 +418,7 @@ function render() {
     `<option value="">Tutte le zone</option>`,
     ...bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
   ].join("");
+  fillCatalogAreaSelect();
   renderCatalog();
 }
 
@@ -515,7 +563,10 @@ function renderCatalog() {
   $("#catalog-grid").innerHTML = bodyAreas.map((area) => {
     const items = (state.data.catalog || []).filter((item) => item.body_area === area);
     return `<section class="catalog-group">
-      <h3>${escapeHtml(area)} <span>${items.length} esercizi</span></h3>
+      <div class="catalog-group-head">
+        <div><h3>${escapeHtml(area)}</h3><span>${items.length} esercizi</span></div>
+        <button class="area-edit" data-edit-area="${escapeHtml(area)}" type="button">Modifica nome</button>
+      </div>
       <div class="catalog-list">${items.map((item) => `
         <div class="catalog-item">
           <span>${escapeHtml(item.name)}</span>
@@ -523,6 +574,15 @@ function renderCatalog() {
         </div>`).join("") || `<span class="empty-catalog">Nessun esercizio</span>`}</div>
     </section>`;
   }).join("");
+}
+
+function openAreaEdit(area) {
+  const form = $("#area-form");
+  form.reset();
+  form.elements.oldName.value = area;
+  form.elements.name.value = area;
+  $("#area-dialog").showModal();
+  form.elements.name.focus();
 }
 
 function renderHistory() {
@@ -967,6 +1027,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("#new-catalog-exercise")) {
     if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
     $("#catalog-form").reset();
+    fillCatalogAreaSelect();
     $("#catalog-custom-area-wrap").classList.add("hidden");
     $("#catalog-dialog").showModal();
   }
@@ -1111,13 +1172,12 @@ document.addEventListener("click", async (event) => {
   }
   const scheduleReminderButton = event.target.closest("[data-schedule-reminder]");
   if (scheduleReminderButton) {
-    const item = (state.data.schedule || []).find((entry) => entry.id === Number(scheduleReminderButton.dataset.scheduleReminder));
-    if (item) {
-      const text = scheduleReminderText(item);
-      const url = whatsappReminderUrl(item, text);
-      if (!url) return toast("Inserisci il telefono WhatsApp nella scheda della persona.");
-      window.open(url, "_blank", "noopener");
-      toast("WhatsApp aperto con il promemoria.");
+    try {
+      const data = await request(`/api/schedule/${scheduleReminderButton.dataset.scheduleReminder}/reminder-link`, { method:"POST" });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il promemoria e link di conferma.");
+    } catch (error) {
+      toast(error.message);
     }
   }
   const scheduleDeleteButton = event.target.closest("[data-delete-schedule]");
@@ -1145,6 +1205,8 @@ document.addEventListener("click", async (event) => {
     await load();
     toast("Esercizio rimosso dal catalogo.");
   }
+  const editAreaButton = event.target.closest("[data-edit-area]");
+  if (editAreaButton) openAreaEdit(editAreaButton.dataset.editArea);
 });
 
 document.addEventListener("keydown", (event) => {
@@ -1401,6 +1463,34 @@ $("#catalog-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("#area-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  const oldName = form.get("oldName");
+  const name = form.get("name");
+  try {
+    await request("/api/body-areas", {
+      method:"PUT",
+      body:JSON.stringify({ oldName, name })
+    });
+    $("#area-dialog").close();
+    await load();
+    $("#catalog-filter").value = bodyAreaList().includes(name) ? name : "";
+    renderCatalog();
+    toast("Nome macro area aggiornato.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
+});
+
 $("#login-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -1501,8 +1591,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v37")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v37", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v40")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v40", "1");
     window.location.reload();
   });
 }

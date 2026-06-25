@@ -165,7 +165,7 @@ function normalizeSchedule(body) {
     time:/^\d{2}:\d{2}$/.test(time) ? time : "",
     trainer:cleanText(body.trainer, 100),
     notes:cleanText(body.notes, 500),
-    status:["scheduled", "done"].includes(body.status) ? body.status : "scheduled"
+    status:["scheduled", "confirmed", "cancelled", "done"].includes(body.status) ? body.status : "scheduled"
   };
 }
 
@@ -238,6 +238,93 @@ function formaeWhatsappSignature() {
 
 function whatsappNumber(value) {
   return String(value || "").replace(/[^\d]/g, "");
+}
+
+function scheduleStatusLabel(status = "scheduled") {
+  return {
+    scheduled:"In attesa",
+    confirmed:"Confermato",
+    cancelled:"Annullato",
+    done:"Svolto"
+  }[status] || "In attesa";
+}
+
+function appointmentHtml(item) {
+  const token = escapeHtml(item.response_token);
+  const status = escapeHtml(scheduleStatusLabel(item.status));
+  return `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Formae - Conferma appuntamento</title>
+  <style>
+    :root { color-scheme:light; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }
+    body { margin:0; min-height:100vh; background:linear-gradient(145deg,#111827,#20293a); color:#111827; display:grid; place-items:center; padding:18px; }
+    main { width:min(430px,100%); }
+    .card { background:#fff; border-radius:22px; overflow:hidden; box-shadow:0 24px 70px rgba(0,0,0,.28); }
+    header { background:#111827; color:#fff; padding:24px 22px; }
+    .logo { color:#ffcc05; font-weight:950; letter-spacing:.02em; font-size:28px; margin-bottom:10px; }
+    h1 { margin:0 0 8px; font-size:25px; }
+    p { margin:0; line-height:1.45; color:#65708a; }
+    header p { color:#d6dcec; }
+    .body { padding:22px; display:grid; gap:16px; }
+    .detail { background:#f1f5fb; border:1px solid #dbe3ef; border-radius:16px; padding:16px; }
+    .detail b { display:block; font-size:20px; margin-bottom:4px; }
+    .status { display:inline-flex; width:max-content; border-radius:999px; padding:7px 11px; background:#fff6d1; color:#8c6800; font-weight:900; }
+    .actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    button { min-height:52px; border:0; border-radius:14px; font:inherit; font-weight:900; cursor:pointer; }
+    .confirm { background:#1f9d63; color:#fff; }
+    .cancel { background:#fff0f2; color:#c8435b; }
+    button:disabled { opacity:.7; cursor:wait; }
+    .result { font-weight:800; color:#1f9d63; min-height:22px; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <header>
+        <div class="logo">formae</div>
+        <h1>Conferma allenamento</h1>
+        <p>${escapeHtml(item.person_name)}, scegli se confermare o annullare l'appuntamento.</p>
+      </header>
+      <div class="body">
+        <div class="detail">
+          <b>${escapeHtml(item.scheduled_date)} alle ${escapeHtml(item.scheduled_time)}</b>
+          <p>Personal trainer: ${escapeHtml(item.trainer || "Da assegnare")}</p>
+        </div>
+        <span class="status">Stato attuale: ${status}</span>
+        <div class="actions">
+          <button class="confirm" type="button" data-status="confirmed">Confermo</button>
+          <button class="cancel" type="button" data-status="cancelled">Annulla</button>
+        </div>
+        <div class="result" id="result"></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    const result = document.querySelector("#result");
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-status]");
+      if (!button) return;
+      document.querySelectorAll("button").forEach((item) => item.disabled = true);
+      try {
+        const response = await fetch("/api/appointment/${token}", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ status:button.dataset.status })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "Errore");
+        result.textContent = "Grazie, risposta registrata: " + body.label + ".";
+      } catch (error) {
+        result.textContent = error.message || "Errore, riprova.";
+        document.querySelectorAll("button").forEach((item) => item.disabled = false);
+      }
+    });
+  </script>
+</body>
+</html>`;
 }
 
 function rpeHtml(workout) {
@@ -333,6 +420,17 @@ function validateMutationOrigin(req) {
 }
 
 async function api(req, res, url) {
+  const publicAppointmentMatch = url.pathname.match(/^\/api\/appointment\/([a-f0-9]{32,80})$/i);
+  if (req.method === "POST" && publicAppointmentMatch) {
+    const body = await readBody(req);
+    const status = ["confirmed", "cancelled"].includes(body.status) ? body.status : "";
+    if (!status) return json(res, 400, { error:"Risposta non valida." });
+    if (!await store.setScheduleStatusByToken(publicAppointmentMatch[1], status)) {
+      return json(res, 404, { error:"Link appuntamento non valido o scaduto." });
+    }
+    return json(res, 200, { ok:true, status, label:scheduleStatusLabel(status) });
+  }
+
   const publicRpeMatch = url.pathname.match(/^\/api\/rpe\/([a-f0-9]{32,80})$/i);
   if (req.method === "POST" && publicRpeMatch) {
     const body = await readBody(req);
@@ -469,6 +567,16 @@ async function api(req, res, url) {
       throw error;
     }
   }
+  if (req.method === "PUT" && url.pathname === "/api/body-areas") {
+    const body = await readBody(req);
+    const oldName = cleanText(body.oldName, 50);
+    const name = cleanText(body.name, 50);
+    if (!oldName || !name) {
+      return json(res, 400, { error:"Inserisci il vecchio e il nuovo nome della macro area." });
+    }
+    await store.renameBodyArea(oldName, name);
+    return json(res, 200, { ok:true });
+  }
   const catalogMatch = url.pathname.match(/^\/api\/catalog\/(\d+)$/);
   if (req.method === "DELETE" && catalogMatch) {
     if (!await store.deleteCatalog(Number(catalogMatch[1]))) {
@@ -485,6 +593,21 @@ async function api(req, res, url) {
     return json(res, 201, { id:await store.addSchedule(body) });
   }
   const scheduleMatch = url.pathname.match(/^\/api\/schedule\/(\d+)$/);
+  const scheduleReminderMatch = url.pathname.match(/^\/api\/schedule\/(\d+)\/reminder-link$/);
+  if (req.method === "POST" && scheduleReminderMatch) {
+    const token = crypto.randomBytes(24).toString("hex");
+    const item = await store.prepareScheduleResponseLink(Number(scheduleReminderMatch[1]), token);
+    if (!item) return json(res, 404, { error:"Appuntamento non trovato." });
+    const phone = whatsappNumber(item.person_phone);
+    if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
+    const appointmentUrl = `${publicBaseUrl(req)}/appointment/${item.response_token || token}`;
+    const message = `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${item.scheduled_date} alle ${item.scheduled_time} con ${item.trainer}. Conferma o annulla qui: ${appointmentUrl}${formaeWhatsappSignature()}`;
+    return json(res, 200, {
+      ok:true,
+      url:appointmentUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
   if (req.method === "PUT" && scheduleMatch) {
     const body = normalizeSchedule(await readBody(req));
     if (!body.personId || !body.date || !body.time || !body.trainer) {
@@ -592,6 +715,22 @@ async function serveRpePage(res, token) {
   res.end(rpeHtml(workout));
 }
 
+async function serveAppointmentPage(res, token) {
+  const item = await store.scheduleByResponseToken(token);
+  if (!item) {
+    res.writeHead(404, { "Content-Type":"text/plain; charset=utf-8", "Cache-Control":"no-store" });
+    return res.end("Link appuntamento non valido o scaduto.");
+  }
+  res.writeHead(200, {
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"same-origin",
+    "Content-Security-Policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
+  });
+  res.end(appointmentHtml(item));
+}
+
 function serveFile(res, pathname) {
   const requested = pathname === "/" ? "index.html" : pathname.slice(1);
   const filePath = path.resolve(publicDir, requested);
@@ -630,6 +769,11 @@ const server = http.createServer(async (req, res) => {
       } catch {
         return json(res, 503, { ok:false, database:store.type });
       }
+    }
+    const appointmentPageMatch = url.pathname.match(/^\/appointment\/([a-f0-9]{32,80})$/i);
+    if (appointmentPageMatch) {
+      if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
+      return serveAppointmentPage(res, appointmentPageMatch[1]);
     }
     const rpePageMatch = url.pathname.match(/^\/rpe\/([a-f0-9]{32,80})$/i);
     if (rpePageMatch) {

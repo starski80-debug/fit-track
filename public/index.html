@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=37">
+  <link rel="stylesheet" href="/style.css?v=40">
 </head>
 <body>
   <aside class="sidebar">
@@ -236,7 +236,7 @@
         </select>
         <p>Le modifiche saranno disponibili subito nei nuovi allenamenti.</p>
       </div>
-      <div class="catalog-info">Qui puoi modificare il database degli esercizi: aggiungi nuove voci con il pulsante in alto oppure elimina quelle che non utilizzi.</div>
+      <div class="catalog-info">Qui puoi modificare il database degli esercizi: aggiungi nuove voci, elimina quelle che non utilizzi o rinomina le macro aree come Altro, Cardio e Gambe.</div>
       <div id="catalog-grid" class="catalog-grid"></div>
     </section>
   </main>
@@ -381,6 +381,15 @@
     </div>
   </dialog>
 
+  <dialog id="area-dialog">
+    <form id="area-form">
+      <input name="oldName" type="hidden">
+      <div class="modal-head"><div><p class="eyebrow">MACRO AREA</p><h2>Modifica nome scheda</h2></div><button type="button" class="close">×</button></div>
+      <label>Nuovo nome<input name="name" placeholder="Es. Mobilita" required></label>
+      <button class="primary full" type="submit">Salva nome</button>
+    </form>
+  </dialog>
+
   <dialog id="day-dialog">
     <div class="day-dialog-content">
       <div class="modal-head">
@@ -432,7 +441,7 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=37"></script>
+  <script src="/app.js?v=40"></script>
 </body>
 </html>
 

@@ -108,17 +108,68 @@ h2 { margin-bottom:0; }
   border-color:rgba(255,204,5,.55);
   box-shadow:0 18px 38px rgba(8,11,18,.18);
 }
-.home-tab-primary {
-  background:linear-gradient(145deg,#ffcc05,#f0a800);
+.home-tab-primary { background:linear-gradient(145deg,#111827,#171b26); color:#fff; }
+.home-tab-primary span { background:rgba(255,204,5,.13); color:#ffcc05; }
+.home-tab-primary strong { color:#fff; }
+.home-tab-primary small { color:#c8cedd; }
+.sidebar .nav-item span,
+.mobile-nav .nav-item {
+  color:#ffcc05;
+}
+.sidebar .nav-item.active span {
+  background:#ffcc05;
   color:#111827;
 }
-.home-tab-primary span {
-  background:rgba(17,24,39,.12);
-  color:#111827;
-}
-.home-tab-primary strong,
-.home-tab-primary small { color:#111827; }
 .page-panel { margin-top:0; }
+.calendar-grid {
+  display:grid;
+  gap:10px;
+  margin:0 0 16px;
+  padding:14px;
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:var(--surface-soft);
+}
+.calendar-month {
+  font-size:18px;
+  font-weight:900;
+  text-transform:capitalize;
+}
+.calendar-weekdays,
+.calendar-days {
+  display:grid;
+  grid-template-columns:repeat(7,minmax(0,1fr));
+  gap:8px;
+}
+.calendar-weekdays span {
+  color:var(--muted);
+  font-size:11px;
+  font-weight:900;
+  text-align:center;
+  text-transform:uppercase;
+}
+.calendar-day {
+  min-height:88px;
+  display:grid;
+  align-content:start;
+  gap:7px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:10px;
+  background:var(--surface);
+  color:var(--ink);
+  text-align:left;
+}
+.calendar-day.active,
+.calendar-day:hover {
+  border-color:#ffcc05;
+  box-shadow:0 10px 24px rgba(8,11,18,.1);
+}
+.calendar-day.muted { background:transparent; border-color:transparent; }
+.calendar-day strong { font-size:18px; }
+.calendar-day span { min-height:15px; color:var(--muted); font-size:11px; font-weight:800; }
+.calendar-colors { display:flex; flex-wrap:wrap; gap:4px; }
+.calendar-colors i { width:13px; height:13px; border-radius:4px; }
 .schedule-item {
   border-left:6px solid var(--trainer-color,#ffcc05);
 }
@@ -143,6 +194,92 @@ h2 { margin-bottom:0; }
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
   gap:16px;
+}
+.group-detail {
+  margin:0 0 18px;
+  padding:18px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:var(--surface);
+}
+.group-members-detail,
+.workout-people-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:14px;
+}
+.compact-head { margin:0 0 14px; }
+.template-form {
+  display:grid;
+  gap:12px;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:var(--surface);
+  margin-bottom:18px;
+}
+.template-form > label {
+  margin:0;
+}
+.template-rows {
+  display:grid;
+  gap:8px;
+}
+.template-row {
+  display:grid;
+  grid-template-columns:.65fr 1.2fr .5fr .65fr .65fr 1.4fr 1fr auto;
+  gap:7px;
+}
+.remove-template-row {
+  border:0;
+  border-radius:10px;
+  background:#fff0f2;
+  color:#c8435b;
+  font-weight:900;
+}
+.template-actions {
+  display:flex;
+  gap:9px;
+  flex-wrap:wrap;
+}
+.templates-list {
+  display:grid;
+  gap:16px;
+}
+.template-card {
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:20px;
+  background:var(--surface);
+}
+.template-card-head {
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  padding:18px;
+  background:#ffcc05;
+  color:#111827;
+}
+.template-card-head h3 { margin:0 0 5px; font-size:24px; }
+.template-card-head .eyebrow { color:#111827; }
+.template-card-head > div:last-child { display:flex; gap:8px; align-items:start; }
+.template-table { overflow:auto; }
+.template-table-row {
+  display:grid;
+  grid-template-columns:1.3fr .55fr .75fr .75fr 1.6fr 1fr;
+  min-width:820px;
+}
+.template-table-row span {
+  padding:10px;
+  border-right:1px solid #222;
+  border-bottom:1px solid #222;
+  font-size:13px;
+  font-weight:800;
+}
+.template-table-head span {
+  background:#222;
+  color:#ffcc05;
+  text-transform:uppercase;
 }
 .group-card {
   display:grid;

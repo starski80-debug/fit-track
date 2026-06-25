@@ -12,16 +12,19 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=35">
+  <link rel="stylesheet" href="/style.css?v=36">
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="#"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></a>
     <nav>
       <button class="nav-item active" data-view="dashboard"><span>H</span> Panoramica</button>
+      <button class="nav-item" data-view="people"><span>P</span> Anagrafiche clienti</button>
       <button class="nav-item" data-view="workouts"><span>A</span> Allenamenti</button>
       <button class="nav-item" data-view="calendar"><span>C</span> Calendario</button>
       <button class="nav-item" data-view="groups"><span>G</span> Gruppi</button>
+      <button class="nav-item" data-view="employees"><span>D</span> Dipendenti</button>
+      <button class="nav-item" data-view="templates"><span>T</span> Schede di allenamento</button>
       <button class="nav-item" data-view="history"><span>S</span> Storico</button>
     </nav>
     <div class="sidebar-note">
@@ -85,6 +88,7 @@
             <input id="schedule-date" type="date">
           </label>
         </div>
+        <div id="calendar-grid" class="calendar-grid"></div>
         <form id="schedule-form" class="schedule-form">
           <input name="id" type="hidden">
           <label>Persona
@@ -134,7 +138,44 @@
           <button class="primary" id="group-submit" type="submit">Salva gruppo</button>
         </div>
       </form>
+      <div id="group-detail" class="group-detail hidden"></div>
       <div id="groups-grid" class="groups-grid"></div>
+    </section>
+
+    <section id="employees-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">STAFF</p><h2>Anagrafica dipendenti</h2></div>
+      </div>
+      <form id="employee-form" class="group-form">
+        <input name="id" type="hidden">
+        <label>Nome<input name="name" placeholder="Es. Leonardo" required></label>
+        <label>Colore<input name="color" type="color" value="#ffcc05"></label>
+        <label>Ruolo<input name="role" placeholder="Personal trainer"></label>
+        <div class="group-actions">
+          <button class="secondary hidden" id="employee-cancel-edit" type="button">Annulla</button>
+          <button class="primary" id="employee-submit" type="submit">Salva dipendente</button>
+        </div>
+      </form>
+      <div id="employees-grid" class="groups-grid"></div>
+    </section>
+
+    <section id="templates-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">PROGRAMMAZIONE</p><h2>Schede di allenamento</h2></div>
+      </div>
+      <form id="template-form" class="template-form">
+        <input name="id" type="hidden">
+        <label>Titolo scheda<input name="title" placeholder="Es. Programmazione A" required></label>
+        <label>Persona<select name="personId" id="template-person"></select></label>
+        <label>Note generali<input name="notes" placeholder="Obiettivo o periodo"></label>
+        <div id="template-rows" class="template-rows"></div>
+        <div class="template-actions">
+          <button type="button" class="secondary" id="add-template-row">+ Riga esercizio</button>
+          <button type="button" class="secondary hidden" id="template-cancel-edit">Annulla</button>
+          <button class="primary" type="submit">Salva scheda</button>
+        </div>
+      </form>
+      <div id="templates-list" class="templates-list"></div>
     </section>
 
     <section id="history-view" class="view hidden">
@@ -202,6 +243,7 @@
 
   <nav class="mobile-nav">
     <button class="nav-item active" data-view="dashboard">H<small>Home</small></button>
+    <button class="nav-item" data-view="people">P<small>Clienti</small></button>
     <button class="nav-item" data-view="workouts">A<small>Allen.</small></button>
     <button class="nav-item" data-view="calendar">C<small>Agenda</small></button>
     <button class="nav-item" data-view="groups">G<small>Gruppi</small></button>
@@ -367,8 +409,20 @@
       <button type="button" class="remove-exercise" aria-label="Rimuovi">Ã—</button>
     </div>
   </template>
+  <template id="template-row-template">
+    <div class="template-row">
+      <input class="template-block" placeholder="Blocco" aria-label="Blocco">
+      <input class="template-exercise" placeholder="Esercizio" aria-label="Esercizio">
+      <input class="template-sets" placeholder="Serie" aria-label="Serie">
+      <input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni">
+      <input class="template-rest" placeholder="Recupero" aria-label="Recupero">
+      <input class="template-notes" placeholder="Note" aria-label="Note">
+      <input class="template-weeks" placeholder="1-7 week" aria-label="Settimane">
+      <button type="button" class="remove-template-row" aria-label="Rimuovi">Ã—</button>
+    </div>
+  </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=35"></script>
+  <script src="/app.js?v=36"></script>
 </body>
 </html>
 

@@ -34,6 +34,32 @@ function createSqliteStore() {
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS employees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#ffcc05',
+      role TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS training_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      person_id INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS template_rows (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER NOT NULL REFERENCES training_templates(id) ON DELETE CASCADE,
+      block TEXT NOT NULL DEFAULT '',
+      exercise TEXT NOT NULL DEFAULT '',
+      sets TEXT NOT NULL DEFAULT '',
+      reps TEXT NOT NULL DEFAULT '',
+      rest TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      weeks TEXT NOT NULL DEFAULT '',
+      position INTEGER NOT NULL DEFAULT 0
+    );
     CREATE TABLE IF NOT EXISTS workouts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
@@ -110,7 +136,10 @@ function createSqliteStore() {
     async dashboard() {
       const people = db.prepare("SELECT * FROM people ORDER BY name").all();
       const groups = db.prepare("SELECT * FROM groups ORDER BY name COLLATE NOCASE").all();
+      const employees = db.prepare("SELECT * FROM employees ORDER BY name COLLATE NOCASE").all();
       const catalog = db.prepare("SELECT * FROM exercise_catalog ORDER BY body_area, name COLLATE NOCASE").all();
+      const templates = db.prepare("SELECT * FROM training_templates ORDER BY created_at DESC, id DESC").all();
+      const templateRows = db.prepare("SELECT * FROM template_rows WHERE template_id = ? ORDER BY position, id");
       const schedule = db.prepare(`
         SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
         FROM scheduled_sessions s JOIN people p ON p.id = s.person_id
@@ -122,7 +151,11 @@ function createSqliteStore() {
         ORDER BY w.workout_date DESC, w.id DESC
       `).all();
       const exercises = db.prepare("SELECT * FROM exercises WHERE workout_id = ? ORDER BY id");
-      return { people, groups, catalog, schedule, workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) })) };
+      return {
+        people, groups, employees, catalog, schedule,
+        templates:templates.map((item) => ({ ...item, rows:templateRows.all(item.id) })),
+        workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) }))
+      };
     },
     async addPerson(body) {
       return Number(db.prepare(`
@@ -144,6 +177,36 @@ function createSqliteStore() {
       db.prepare("UPDATE people SET group_id=0 WHERE group_id=?").run(id);
       return db.prepare("DELETE FROM groups WHERE id=?").run(id).changes > 0;
     },
+    async addEmployee(body) {
+      return Number(db.prepare("INSERT INTO employees (name, color, role) VALUES (?, ?, ?)").run(body.name, body.color, body.role).lastInsertRowid);
+    },
+    async updateEmployee(id, body) {
+      return db.prepare("UPDATE employees SET name=?, color=?, role=? WHERE id=?").run(body.name, body.color, body.role, id).changes > 0;
+    },
+    async deleteEmployee(id) { return db.prepare("DELETE FROM employees WHERE id=?").run(id).changes > 0; },
+    async addTemplate(body) {
+      db.exec("BEGIN");
+      try {
+        const id = Number(db.prepare("INSERT INTO training_templates (title, person_id, notes) VALUES (?, ?, ?)").run(body.title, body.personId, body.notes).lastInsertRowid);
+        const insert = db.prepare("INSERT INTO template_rows (template_id, block, exercise, sets, reps, rest, notes, weeks, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        body.rows.forEach((row, index) => insert.run(id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index));
+        db.exec("COMMIT");
+        return id;
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
+    async updateTemplate(id, body) {
+      db.exec("BEGIN");
+      try {
+        const changes = db.prepare("UPDATE training_templates SET title=?, person_id=?, notes=? WHERE id=?").run(body.title, body.personId, body.notes, id).changes;
+        if (!changes) { db.exec("ROLLBACK"); return false; }
+        db.prepare("DELETE FROM template_rows WHERE template_id=?").run(id);
+        const insert = db.prepare("INSERT INTO template_rows (template_id, block, exercise, sets, reps, rest, notes, weeks, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        body.rows.forEach((row, index) => insert.run(id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index));
+        db.exec("COMMIT");
+        return true;
+      } catch (error) { db.exec("ROLLBACK"); throw error; }
+    },
+    async deleteTemplate(id) { return db.prepare("DELETE FROM training_templates WHERE id=?").run(id).changes > 0; },
     async addCatalog(area, name) {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
@@ -307,6 +370,32 @@ function createPostgresStore() {
           notes TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS employees (
+          id BIGSERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          color TEXT NOT NULL DEFAULT '#ffcc05',
+          role TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS training_templates (
+          id BIGSERIAL PRIMARY KEY,
+          title TEXT NOT NULL,
+          person_id BIGINT NOT NULL DEFAULT 0,
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS template_rows (
+          id BIGSERIAL PRIMARY KEY,
+          template_id BIGINT NOT NULL REFERENCES training_templates(id) ON DELETE CASCADE,
+          block TEXT NOT NULL DEFAULT '',
+          exercise TEXT NOT NULL DEFAULT '',
+          sets TEXT NOT NULL DEFAULT '',
+          reps TEXT NOT NULL DEFAULT '',
+          rest TEXT NOT NULL DEFAULT '',
+          notes TEXT NOT NULL DEFAULT '',
+          weeks TEXT NOT NULL DEFAULT '',
+          position INTEGER NOT NULL DEFAULT 0
+        );
         CREATE TABLE IF NOT EXISTS workouts (
           id BIGSERIAL PRIMARY KEY, person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
           workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
@@ -371,9 +460,10 @@ function createPostgresStore() {
       }
     },
     async dashboard() {
-      const [people, groups, catalog, schedule, workouts, exercises] = await Promise.all([
+      const [people, groups, employees, catalog, schedule, workouts, exercises, templates, templateRows] = await Promise.all([
         query("SELECT * FROM people ORDER BY name"),
         query("SELECT * FROM groups ORDER BY LOWER(name)"),
+        query("SELECT * FROM employees ORDER BY LOWER(name)"),
         query("SELECT * FROM exercise_catalog ORDER BY body_area, LOWER(name)"),
         query(`SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
           FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
@@ -381,7 +471,9 @@ function createPostgresStore() {
         query(`SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
           FROM workouts w JOIN people p ON p.id=w.person_id
           ORDER BY w.workout_date DESC, w.id DESC`),
-        query("SELECT * FROM exercises ORDER BY id")
+        query("SELECT * FROM exercises ORDER BY id"),
+        query("SELECT * FROM training_templates ORDER BY created_at DESC, id DESC"),
+        query("SELECT * FROM template_rows ORDER BY position, id")
       ]);
       const byWorkout = new Map();
       for (const exercise of exercises.rows) {
@@ -389,11 +481,19 @@ function createPostgresStore() {
         if (!byWorkout.has(key)) byWorkout.set(key, []);
         byWorkout.get(key).push(exercise);
       }
+      const rowsByTemplate = new Map();
+      for (const row of templateRows.rows) {
+        const key = String(row.template_id);
+        if (!rowsByTemplate.has(key)) rowsByTemplate.set(key, []);
+        rowsByTemplate.get(key).push({ ...row, id:Number(row.id), template_id:Number(row.template_id) });
+      }
       return {
         people:people.rows.map((item) => ({ ...item, id:Number(item.id), group_id:Number(item.group_id || 0) })),
         groups:groups.rows.map((item) => ({ ...item, id:Number(item.id) })),
+        employees:employees.rows.map((item) => ({ ...item, id:Number(item.id) })),
         catalog:catalog.rows.map((item) => ({ ...item, id:Number(item.id) })),
         schedule:schedule.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id) })),
+        templates:templates.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id || 0), rows:rowsByTemplate.get(String(item.id)) || [] })),
         workouts:workouts.rows.map((item) => ({
           ...item,
           id:Number(item.id),
@@ -432,6 +532,49 @@ function createPostgresStore() {
     async deleteGroup(id) {
       await query("UPDATE people SET group_id=0 WHERE group_id=$1", [id]);
       const result = await query("DELETE FROM groups WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
+    async addEmployee(body) {
+      const result = await query("INSERT INTO employees (name,color,role) VALUES ($1,$2,$3) RETURNING id", [body.name, body.color, body.role]);
+      return Number(result.rows[0].id);
+    },
+    async updateEmployee(id, body) {
+      const result = await query("UPDATE employees SET name=$1,color=$2,role=$3 WHERE id=$4", [body.name, body.color, body.role, id]);
+      return result.rowCount > 0;
+    },
+    async deleteEmployee(id) {
+      const result = await query("DELETE FROM employees WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
+    async addTemplate(body) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query("INSERT INTO training_templates (title,person_id,notes) VALUES ($1,$2,$3) RETURNING id", [body.title, body.personId, body.notes]);
+        const id = Number(result.rows[0].id);
+        for (const [index, row] of body.rows.entries()) {
+          await client.query("INSERT INTO template_rows (template_id,block,exercise,sets,reps,rest,notes,weeks,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index]);
+        }
+        await client.query("COMMIT");
+        return id;
+      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    },
+    async updateTemplate(id, body) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query("UPDATE training_templates SET title=$1,person_id=$2,notes=$3 WHERE id=$4", [body.title, body.personId, body.notes, id]);
+        if (!result.rowCount) { await client.query("ROLLBACK"); return false; }
+        await client.query("DELETE FROM template_rows WHERE template_id=$1", [id]);
+        for (const [index, row] of body.rows.entries()) {
+          await client.query("INSERT INTO template_rows (template_id,block,exercise,sets,reps,rest,notes,weeks,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index]);
+        }
+        await client.query("COMMIT");
+        return true;
+      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
+    },
+    async deleteTemplate(id) {
+      const result = await query("DELETE FROM training_templates WHERE id=$1", [id]);
       return result.rowCount > 0;
     },
     async addCatalog(area, name) {

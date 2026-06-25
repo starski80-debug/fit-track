@@ -1,4 +1,7 @@
-const state = { data: null, view: "dashboard", historyPersonId: null, peopleSearch: "", scheduleDate:new Date().toISOString().slice(0, 10) };
+const state = {
+  data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
+  scheduleDate:new Date().toISOString().slice(0, 10), workoutPersonId:null, groupDetailId:null
+};
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -165,7 +168,8 @@ function scheduleReminderText(item) {
 }
 
 function trainerColor(name = "") {
-  return { Leonardo:"#ffcc05", Michele:"#32d1ff", Giulia:"#ff6aa2" }[name] || "#6c63ff";
+  const employee = (state.data?.employees || []).find((item) => item.name === name);
+  return employee?.color || { Leonardo:"#ffcc05", Michele:"#32d1ff", Giulia:"#ff6aa2" }[name] || "#6c63ff";
 }
 
 function scheduleCard(item) {
@@ -213,6 +217,12 @@ function openScheduleEdit(item) {
 function renderSchedule() {
   const schedule = state.data.schedule || [];
   $("#schedule-date").value = state.scheduleDate;
+  const employeeOptions = employeeOptionHtml();
+  $$("select[name=trainer], select[name=operator]").forEach((select) => {
+    const current = select.value;
+    select.innerHTML = employeeOptions;
+    select.value = current;
+  });
   $("#schedule-person").innerHTML = state.data.people.map((person) =>
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
@@ -223,6 +233,10 @@ function renderSchedule() {
   const tomorrow = tomorrowDate();
   const reminders = schedule.filter((item) => item.scheduled_date === tomorrow);
   $("#schedule-list").innerHTML = `
+    <div class="schedule-column calendar-detail">
+      <h3>Dettaglio ${formatDate(state.scheduleDate)}</h3>
+      ${selected.map(scheduleCard).join("") || `<div class="empty schedule-empty">Clicca su un giorno o aggiungi un appuntamento.</div>`}
+    </div>
     <div class="schedule-column schedule-reminders">
       <h3>Promemoria di domani</h3>
       ${reminders.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun promemoria per domani.</div>`}
@@ -235,6 +249,41 @@ function renderSchedule() {
       <h3>Prossimi appuntamenti</h3>
       ${upcoming.map(scheduleCard).join("") || `<div class="empty schedule-empty">Nessun appuntamento futuro.</div>`}
     </div>
+  `;
+  renderCalendarGrid();
+}
+
+function employeeOptionHtml() {
+  const employees = state.data?.employees?.length
+    ? state.data.employees
+    : [{ name:"Leonardo" }, { name:"Michele" }, { name:"Giulia" }];
+  return [`<option value="">Seleziona</option>`, ...employees.map((item) => `<option>${escapeHtml(item.name)}</option>`)].join("");
+}
+
+function renderCalendarGrid() {
+  const current = new Date(`${state.scheduleDate}T12:00:00`);
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  const first = new Date(year, month, 1);
+  const startOffset = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const schedule = state.data.schedule || [];
+  const cells = [];
+  for (let i = 0; i < startOffset; i++) cells.push(`<div class="calendar-day muted"></div>`);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const items = schedule.filter((item) => item.scheduled_date === date);
+    const colors = [...new Set(items.map((item) => trainerColor(item.trainer)))];
+    cells.push(`<button type="button" class="calendar-day ${date === state.scheduleDate ? "active" : ""}" data-calendar-day="${date}">
+      <strong>${day}</strong>
+      <span>${items.length ? `${items.length} app.` : ""}</span>
+      <div class="calendar-colors">${colors.map((color) => `<i style="background:${escapeHtml(color)}"></i>`).join("")}</div>
+    </button>`);
+  }
+  $("#calendar-grid").innerHTML = `
+    <div class="calendar-month">${new Intl.DateTimeFormat("it-IT", { month:"long", year:"numeric" }).format(current)}</div>
+    <div class="calendar-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
+    <div class="calendar-days">${cells.join("")}</div>
   `;
 }
 
@@ -261,9 +310,10 @@ function render() {
 
   renderSchedule();
   renderGroups();
+  renderEmployees();
+  renderTemplates();
+  renderWorkoutsView();
   renderHistory();
-  $("#workout-list").innerHTML = workouts.slice(0, 30).map(workoutCard).join("") ||
-    `<div class="empty">Nessun allenamento registrato.</div>`;
   const peopleFilter = state.peopleSearch.trim().toLowerCase();
   const visiblePeople = people.filter((person) => [
     person.name,
@@ -297,6 +347,7 @@ function render() {
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
   $("#person-select").innerHTML = personOptions;
+  $("#template-person").innerHTML = [`<option value="0">Nessuna persona</option>`, personOptions].join("");
   $("#person-group-select").innerHTML = [
     `<option value="0">Nessun gruppo</option>`,
     ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
@@ -308,12 +359,62 @@ function render() {
   renderCatalog();
 }
 
+function renderWorkoutsView() {
+  const people = state.data.people || [];
+  const workouts = state.data.workouts || [];
+  const person = people.find((item) => item.id === Number(state.workoutPersonId));
+  if (!person) {
+    $("#workout-list").innerHTML = `<div class="workout-people-grid">
+      ${people.map((item) => {
+        const count = workouts.filter((workout) => workout.person_id === item.id).length;
+        return `<button type="button" class="person-card workout-person-card" data-workout-person="${item.id}">
+          <div class="avatar" style="background:${escapeHtml(item.color)}">${escapeHtml(item.name[0])}</div>
+          <h3>${escapeHtml(item.name)}</h3>
+          <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
+        </button>`;
+      }).join("") || `<div class="empty">Nessuna persona inserita.</div>`}
+    </div>`;
+    return;
+  }
+  const personWorkouts = workouts.filter((workout) => workout.person_id === person.id);
+  $("#workout-list").innerHTML = `
+    <div class="section-head compact-head">
+      <div><p class="eyebrow">ALLENAMENTI DI</p><h2>${escapeHtml(person.name)}</h2></div>
+      <button type="button" class="secondary" id="workout-person-back">Tutte le persone</button>
+    </div>
+    ${personWorkouts.map(workoutCard).join("") || `<div class="empty">Nessun allenamento registrato per ${escapeHtml(person.name)}.</div>`}
+  `;
+}
+
 function renderGroups() {
   const groups = state.data.groups || [];
   const people = state.data.people || [];
+  const workouts = state.data.workouts || [];
+  const selected = groups.find((group) => group.id === Number(state.groupDetailId));
+  $("#group-detail").classList.toggle("hidden", !selected);
+  if (selected) {
+    const members = people.filter((person) => Number(person.group_id || 0) === selected.id);
+    $("#group-detail").innerHTML = `
+      <div class="section-head compact-head">
+        <div><p class="eyebrow">GRUPPO</p><h2>${escapeHtml(selected.name)}</h2></div>
+        <button type="button" class="secondary" id="group-detail-back">Tutti i gruppi</button>
+      </div>
+      <div class="group-members-detail">
+        ${members.map((person) => {
+          const count = workouts.filter((workout) => workout.person_id === person.id).length;
+          return `<article class="person-card">
+            <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
+            <h3>${escapeHtml(person.name)}</h3>
+            <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
+            <button type="button" class="person-edit" data-open-person-history="${person.id}">Apri allenamenti</button>
+            <button type="button" class="person-edit" data-edit-person="${person.id}">Modifica dati</button>
+          </article>`;
+        }).join("") || `<div class="empty">Nessun iscritto in questo gruppo.</div>`}
+      </div>`;
+  }
   $("#groups-grid").innerHTML = groups.map((group) => {
     const members = people.filter((person) => Number(person.group_id || 0) === group.id);
-    return `<article class="group-card">
+    return `<article class="group-card" data-open-group="${group.id}">
       <div class="group-card-head">
         <span class="group-color" style="background:${escapeHtml(group.color)}"></span>
         <div><h3>${escapeHtml(group.name)}</h3><p>${members.length} ${members.length === 1 ? "persona" : "persone"}</p></div>
@@ -326,6 +427,54 @@ function renderGroups() {
       </div>
     </article>`;
   }).join("") || `<div class="empty">Nessun gruppo creato. Aggiungi il primo gruppo dal modulo sopra.</div>`;
+}
+
+function renderEmployees() {
+  const employees = state.data.employees || [];
+  $("#employees-grid").innerHTML = employees.map((employee) => {
+    const isDefault = String(employee.id).startsWith("default-");
+    return `<article class="group-card">
+    <div class="group-card-head">
+      <span class="group-color" style="background:${escapeHtml(employee.color)}"></span>
+      <div><h3>${escapeHtml(employee.name)}</h3><p>${escapeHtml(employee.role || "Personal trainer")}</p></div>
+    </div>
+    <div class="group-card-actions">
+      ${isDefault ? `<span class="group-notes">Dipendente base: creane uno uguale per personalizzare.</span>` : `<button type="button" class="secondary" data-edit-employee="${employee.id}">Modifica</button>
+      <button type="button" class="danger small-danger" data-delete-employee="${employee.id}">Elimina</button>`}
+    </div>
+  </article>`;
+  }).join("") || `<div class="empty">Nessun dipendente inserito.</div>`;
+}
+
+function addTemplateRow(defaults = {}) {
+  const row = $("#template-row-template").content.firstElementChild.cloneNode(true);
+  $(".template-block", row).value = defaults.block || "";
+  $(".template-exercise", row).value = defaults.exercise || "";
+  $(".template-sets", row).value = defaults.sets || "";
+  $(".template-reps", row).value = defaults.reps || "";
+  $(".template-rest", row).value = defaults.rest || "";
+  $(".template-notes", row).value = defaults.notes || "";
+  $(".template-weeks", row).value = defaults.weeks || "";
+  $("#template-rows").append(row);
+}
+
+function renderTemplates() {
+  const templates = state.data.templates || [];
+  $("#templates-list").innerHTML = templates.map((template) => {
+    const person = state.data.people.find((item) => item.id === Number(template.person_id));
+    return `<article class="template-card">
+      <div class="template-card-head">
+        <div><p class="eyebrow">FORMAE PROGRAMMAZIONE</p><h3>${escapeHtml(template.title)}</h3><span>${person ? escapeHtml(person.name) : "Scheda generale"}</span></div>
+        <div><button type="button" class="secondary" data-edit-template="${template.id}">Modifica</button><button type="button" class="small-danger" data-delete-template="${template.id}">Elimina</button></div>
+      </div>
+      <div class="template-table">
+        <div class="template-table-row template-table-head"><span>Allenamento</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span><span>Week</span></div>
+        ${(template.rows || []).map((row) => `<div class="template-table-row">
+          <span>${escapeHtml(row.block || row.exercise)}</span><span>${escapeHtml(row.sets)}</span><span>${escapeHtml(row.reps)}</span><span>${escapeHtml(row.rest)}</span><span>${escapeHtml(row.notes)}</span><span>${escapeHtml(row.weeks)}</span>
+        </div>`).join("")}
+      </div>
+    </article>`;
+  }).join("") || `<div class="empty">Nessuna scheda creata.</div>`;
 }
 
 function renderCatalog() {
@@ -558,6 +707,16 @@ function rpeTrendChart(days) {
 async function load() {
   state.data = await request("/api/dashboard");
   if (!Array.isArray(state.data.groups)) state.data.groups = [];
+  if (!Array.isArray(state.data.employees)) state.data.employees = [];
+  if (!state.data.employees.length) {
+    state.data.employees = [
+      { id:"default-leonardo", name:"Leonardo", color:"#ffcc05", role:"Personal trainer" },
+      { id:"default-michele", name:"Michele", color:"#32d1ff", role:"Personal trainer" },
+      { id:"default-giulia", name:"Giulia", color:"#ff6aa2", role:"Personal trainer" }
+    ];
+  }
+  if (!Array.isArray(state.data.templates)) state.data.templates = [];
+  if (!$("#template-rows").children.length) addTemplateRow();
   for (const item of state.data.catalog || []) {
     if (item.body_area === "Schiena") item.body_area = "Dorso";
   }
@@ -584,8 +743,9 @@ function switchView(view) {
   $(`#${view}-view`).classList.remove("hidden");
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   $("#page-title").textContent = {
-    dashboard:"Bentornato", workouts:"Allenamenti", calendar:"Calendario", groups:"Gruppi",
-    history:"Il tuo diario", people:"Le persone", catalog:"I tuoi esercizi"
+    dashboard:"Bentornato", people:"Anagrafiche clienti", workouts:"Allenamenti", calendar:"Calendario", groups:"Gruppi",
+    employees:"Dipendenti", templates:"Schede di allenamento",
+    history:"Il tuo diario", catalog:"I tuoi esercizi"
   }[view];
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -715,6 +875,49 @@ function openGroupEdit(group) {
   form.scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
+function resetEmployeeForm() {
+  const form = $("#employee-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.color.value = "#ffcc05";
+  $("#employee-submit").textContent = "Salva dipendente";
+  $("#employee-cancel-edit").classList.add("hidden");
+}
+
+function openEmployeeEdit(employee) {
+  const form = $("#employee-form");
+  form.elements.id.value = employee.id;
+  form.elements.name.value = employee.name || "";
+  form.elements.color.value = employee.color || "#ffcc05";
+  form.elements.role.value = employee.role || "";
+  $("#employee-submit").textContent = "Salva modifiche";
+  $("#employee-cancel-edit").classList.remove("hidden");
+  switchView("employees");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
+function resetTemplateForm() {
+  const form = $("#template-form");
+  form.reset();
+  form.elements.id.value = "";
+  $("#template-rows").innerHTML = "";
+  addTemplateRow();
+  $("#template-cancel-edit").classList.add("hidden");
+}
+
+function openTemplateEdit(template) {
+  const form = $("#template-form");
+  form.elements.id.value = template.id;
+  form.elements.title.value = template.title || "";
+  form.elements.personId.value = template.person_id || 0;
+  form.elements.notes.value = template.notes || "";
+  $("#template-rows").innerHTML = "";
+  (template.rows?.length ? template.rows : [{}]).forEach(addTemplateRow);
+  $("#template-cancel-edit").classList.remove("hidden");
+  switchView("templates");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
+}
+
 document.addEventListener("click", async (event) => {
   const viewButton = event.target.closest("[data-view],[data-go]");
   if (viewButton) switchView(viewButton.dataset.view || viewButton.dataset.go);
@@ -748,6 +951,29 @@ document.addEventListener("click", async (event) => {
     if (person) openPerson(person);
   }
   if (event.target.matches(".close")) event.target.closest("dialog").close();
+  const calendarDay = event.target.closest("[data-calendar-day]");
+  if (calendarDay) {
+    state.scheduleDate = calendarDay.dataset.calendarDay;
+    renderSchedule();
+  }
+  const workoutPerson = event.target.closest("[data-workout-person]");
+  if (workoutPerson) {
+    state.workoutPersonId = Number(workoutPerson.dataset.workoutPerson);
+    renderWorkoutsView();
+  }
+  if (event.target.closest("#workout-person-back")) {
+    state.workoutPersonId = null;
+    renderWorkoutsView();
+  }
+  const openGroup = event.target.closest("[data-open-group]");
+  if (openGroup && !event.target.closest("button")) {
+    state.groupDetailId = Number(openGroup.dataset.openGroup);
+    renderGroups();
+  }
+  if (event.target.closest("#group-detail-back")) {
+    state.groupDetailId = null;
+    renderGroups();
+  }
   const editGroupButton = event.target.closest("[data-edit-group]");
   if (editGroupButton) {
     const group = (state.data.groups || []).find((item) => item.id === Number(editGroupButton.dataset.editGroup));
@@ -763,6 +989,40 @@ document.addEventListener("click", async (event) => {
     } catch (error) {
       toast(error.message);
     }
+  }
+  const editEmployeeButton = event.target.closest("[data-edit-employee]");
+  if (editEmployeeButton) {
+    const employee = (state.data.employees || []).find((item) => String(item.id) === String(editEmployeeButton.dataset.editEmployee));
+    if (employee && !String(employee.id).startsWith("default-")) openEmployeeEdit(employee);
+    else toast("Salva il dipendente in anagrafica per modificarlo.");
+  }
+  const deleteEmployeeButton = event.target.closest("[data-delete-employee]");
+  if (deleteEmployeeButton && confirm("Eliminare questo dipendente? Gli appuntamenti gia inseriti resteranno invariati.")) {
+    try {
+      await request(`/api/employees/${deleteEmployeeButton.dataset.deleteEmployee}`, { method:"DELETE" });
+      resetEmployeeForm();
+      await load();
+      toast("Dipendente eliminato.");
+    } catch (error) { toast(error.message); }
+  }
+  const editTemplateButton = event.target.closest("[data-edit-template]");
+  if (editTemplateButton) {
+    const template = (state.data.templates || []).find((item) => item.id === Number(editTemplateButton.dataset.editTemplate));
+    if (template) openTemplateEdit(template);
+  }
+  const deleteTemplateButton = event.target.closest("[data-delete-template]");
+  if (deleteTemplateButton && confirm("Eliminare questa scheda?")) {
+    try {
+      await request(`/api/templates/${deleteTemplateButton.dataset.deleteTemplate}`, { method:"DELETE" });
+      resetTemplateForm();
+      await load();
+      toast("Scheda eliminata.");
+    } catch (error) { toast(error.message); }
+  }
+  if (event.target.closest("#add-template-row")) addTemplateRow();
+  if (event.target.matches(".remove-template-row")) {
+    if ($$(".template-row").length > 1) event.target.closest(".template-row").remove();
+    else toast("Serve almeno una riga.");
   }
   const phaseAddButton = event.target.closest("[data-add-phase]");
   if (phaseAddButton) addExercise({ sets:3, reps:10, phase:phaseAddButton.dataset.addPhase });
@@ -871,6 +1131,8 @@ $("#schedule-date").addEventListener("change", (event) => {
 });
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
 $("#group-cancel-edit").addEventListener("click", resetGroupForm);
+$("#employee-cancel-edit").addEventListener("click", resetEmployeeForm);
+$("#template-cancel-edit").addEventListener("click", resetTemplateForm);
 $("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
   $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
 });
@@ -1012,6 +1274,63 @@ $("#group-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("#employee-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/employees/${id}` : "/api/employees", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ name:form.get("name"), color:form.get("color"), role:form.get("role") })
+    });
+    resetEmployeeForm();
+    await load();
+    toast(id ? "Dipendente aggiornato." : "Dipendente creato.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
+});
+
+$("#template-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  const rows = $$(".template-row").map((row) => ({
+    block:$(".template-block", row).value,
+    exercise:$(".template-exercise", row).value,
+    sets:$(".template-sets", row).value,
+    reps:$(".template-reps", row).value,
+    rest:$(".template-rest", row).value,
+    notes:$(".template-notes", row).value,
+    weeks:$(".template-weeks", row).value
+  }));
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/templates/${id}` : "/api/templates", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ title:form.get("title"), personId:Number(form.get("personId")), notes:form.get("notes"), rows })
+    });
+    resetTemplateForm();
+    await load();
+    toast(id ? "Scheda aggiornata." : "Scheda creata.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
+});
+
 $("#catalog-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const formElement = event.currentTarget;
@@ -1141,8 +1460,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v35")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v35", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v36")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v36", "1");
     window.location.reload();
   });
 }

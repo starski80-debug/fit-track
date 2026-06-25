@@ -14,7 +14,6 @@ const authSecret = process.env.AUTH_SECRET || crypto.createHash("sha256").update
 const isProduction = Boolean(process.env.DATABASE_URL);
 const loginAttempts = new Map();
 const phases = new Set(["warmup", "main", "cooldown"]);
-const operators = new Set(["Leonardo", "Michele", "Giulia"]);
 let ready = false;
 let shuttingDown = false;
 const loginCleanup = setInterval(() => {
@@ -143,7 +142,7 @@ function normalizeWorkout(body) {
     date:validDate(body.date),
     duration:finiteNumber(body.duration, 0, 1_440),
     rpe:finiteNumber(body.rpe, 0, 10),
-    operator:operators.has(body.operator) ? body.operator : "",
+    operator:cleanText(body.operator, 100),
     notes:cleanText(body.notes, 2_000),
     exercises:(Array.isArray(body.exercises) ? body.exercises.slice(0, 100) : [])
       .map((item) => ({
@@ -164,9 +163,34 @@ function normalizeSchedule(body) {
     personId:positiveInteger(body.personId),
     date:validDate(body.date),
     time:/^\d{2}:\d{2}$/.test(time) ? time : "",
-    trainer:operators.has(body.trainer) ? body.trainer : "",
+    trainer:cleanText(body.trainer, 100),
     notes:cleanText(body.notes, 500),
     status:["scheduled", "done"].includes(body.status) ? body.status : "scheduled"
+  };
+}
+
+function normalizeEmployee(body) {
+  return {
+    name:cleanText(body.name, 100),
+    color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#ffcc05",
+    role:cleanText(body.role, 100)
+  };
+}
+
+function normalizeTemplate(body) {
+  return {
+    title:cleanText(body.title, 150),
+    personId:positiveInteger(body.personId),
+    notes:cleanText(body.notes, 2_000),
+    rows:(Array.isArray(body.rows) ? body.rows.slice(0, 80) : []).map((row) => ({
+      block:cleanText(row.block, 50),
+      exercise:cleanText(row.exercise, 150),
+      sets:cleanText(row.sets, 50),
+      reps:cleanText(row.reps, 50),
+      rest:cleanText(row.rest, 50),
+      notes:cleanText(row.notes, 500),
+      weeks:cleanText(row.weeks, 500)
+    })).filter((row) => row.exercise || row.block || row.notes)
   };
 }
 
@@ -392,6 +416,40 @@ async function api(req, res, url) {
     if (!await store.deleteGroup(Number(groupMatch[1]))) {
       return json(res, 404, { error:"Gruppo non trovato." });
     }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/employees") {
+    const body = normalizeEmployee(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del dipendente." });
+    return json(res, 201, { id:await store.addEmployee(body) });
+  }
+  const employeeMatch = url.pathname.match(/^\/api\/employees\/(\d+)$/);
+  if (req.method === "PUT" && employeeMatch) {
+    const body = normalizeEmployee(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del dipendente." });
+    if (!await store.updateEmployee(Number(employeeMatch[1]), body)) return json(res, 404, { error:"Dipendente non trovato." });
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && employeeMatch) {
+    if (!await store.deleteEmployee(Number(employeeMatch[1]))) return json(res, 404, { error:"Dipendente non trovato." });
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/templates") {
+    const body = normalizeTemplate(await readBody(req));
+    if (!body.title) return json(res, 400, { error:"Inserisci il titolo della scheda." });
+    return json(res, 201, { id:await store.addTemplate(body) });
+  }
+  const templateMatch = url.pathname.match(/^\/api\/templates\/(\d+)$/);
+  if (req.method === "PUT" && templateMatch) {
+    const body = normalizeTemplate(await readBody(req));
+    if (!body.title) return json(res, 400, { error:"Inserisci il titolo della scheda." });
+    if (!await store.updateTemplate(Number(templateMatch[1]), body)) return json(res, 404, { error:"Scheda non trovata." });
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && templateMatch) {
+    if (!await store.deleteTemplate(Number(templateMatch[1]))) return json(res, 404, { error:"Scheda non trovata." });
     return json(res, 200, { ok:true });
   }
 

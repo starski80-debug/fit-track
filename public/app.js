@@ -195,6 +195,7 @@ function resetScheduleForm() {
   const form = $("#schedule-form");
   form.reset();
   form.elements.id.value = "";
+  form.elements.date.value = state.scheduleDate;
   $("#schedule-submit").textContent = "Aggiungi in agenda";
   $("#schedule-cancel-edit").classList.add("hidden");
 }
@@ -207,7 +208,7 @@ function openScheduleEdit(item) {
   form.elements.personId.value = item.person_id;
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
-  form.elements.notes.value = item.notes || "";
+  form.elements.date.value = item.scheduled_date || state.scheduleDate;
   $("#schedule-submit").textContent = "Salva modifiche";
   $("#schedule-cancel-edit").classList.remove("hidden");
   renderSchedule();
@@ -217,6 +218,7 @@ function openScheduleEdit(item) {
 function renderSchedule() {
   const schedule = state.data.schedule || [];
   $("#schedule-date").value = state.scheduleDate;
+  $("#schedule-form-date").value = state.scheduleDate;
   const employeeOptions = employeeOptionHtml();
   $$("select[name=trainer], select[name=operator]").forEach((select) => {
     const current = select.value;
@@ -274,7 +276,10 @@ function renderCalendarGrid() {
     const date = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const items = schedule.filter((item) => item.scheduled_date === date);
     const colors = [...new Set(items.map((item) => trainerColor(item.trainer)))];
-    cells.push(`<button type="button" class="calendar-day ${date === state.scheduleDate ? "active" : ""}" data-calendar-day="${date}">
+    const fill = colors.length === 1 ? colors[0] : colors.length > 1
+      ? `linear-gradient(135deg, ${colors.map((color, index) => `${color} ${Math.round(index * 100 / colors.length)}%, ${color} ${Math.round((index + 1) * 100 / colors.length)}%`).join(", ")})`
+      : "";
+    cells.push(`<button type="button" class="calendar-day ${items.length ? "has-items" : ""} ${date === state.scheduleDate ? "active" : ""}" data-calendar-day="${date}" style="${fill ? `--day-fill:${escapeHtml(fill)}` : ""}">
       <strong>${day}</strong>
       <span>${items.length ? `${items.length} app.` : ""}</span>
       <div class="calendar-colors">${colors.map((color) => `<i style="background:${escapeHtml(color)}"></i>`).join("")}</div>
@@ -285,6 +290,16 @@ function renderCalendarGrid() {
     <div class="calendar-weekdays"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
     <div class="calendar-days">${cells.join("")}</div>
   `;
+}
+
+function openDayDialog(date) {
+  state.scheduleDate = date;
+  renderSchedule();
+  const items = (state.data.schedule || []).filter((item) => item.scheduled_date === date);
+  $("#day-dialog-title").textContent = formatDate(date);
+  $("#day-dialog-list").innerHTML = items.map(scheduleCard).join("") ||
+    `<div class="empty schedule-empty">Nessun appuntamento in questa giornata.</div>`;
+  $("#day-dialog").showModal();
 }
 
 function tomorrowDate() {
@@ -397,15 +412,17 @@ function renderGroups() {
     $("#group-detail").innerHTML = `
       <div class="section-head compact-head">
         <div><p class="eyebrow">GRUPPO</p><h2>${escapeHtml(selected.name)}</h2></div>
-        <button type="button" class="secondary" id="group-detail-back">Tutti i gruppi</button>
+        <button type="button" class="secondary" id="group-detail-back">Chiudi dettaglio</button>
       </div>
       <div class="group-members-detail">
         ${members.map((person) => {
-          const count = workouts.filter((workout) => workout.person_id === person.id).length;
+          const personWorkouts = workouts.filter((workout) => workout.person_id === person.id);
+          const count = personWorkouts.length;
           return `<article class="person-card">
             <div class="avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0])}</div>
             <h3>${escapeHtml(person.name)}</h3>
             <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
+            <div class="group-workout-mini">${personWorkouts.slice(0, 3).map((workout) => `<span>${formatDate(workout.workout_date)} - ${workout.duration} min</span>`).join("") || `<span>Nessun allenamento registrato</span>`}</div>
             <button type="button" class="person-edit" data-open-person-history="${person.id}">Apri allenamenti</button>
             <button type="button" class="person-edit" data-edit-person="${person.id}">Modifica dati</button>
           </article>`;
@@ -420,7 +437,7 @@ function renderGroups() {
         <div><h3>${escapeHtml(group.name)}</h3><p>${members.length} ${members.length === 1 ? "persona" : "persone"}</p></div>
       </div>
       ${group.notes ? `<p class="group-notes">${escapeHtml(group.notes)}</p>` : ""}
-      <div class="group-members">${members.map((person) => `<button type="button" data-open-person-history="${person.id}">${escapeHtml(person.name)}</button>`).join("") || `<span>Nessuna persona assegnata.</span>`}</div>
+      <p class="group-notes">Clicca nel gruppo per vedere iscritti e allenamenti.</p>
       <div class="group-card-actions">
         <button type="button" class="secondary" data-edit-group="${group.id}">Modifica</button>
         <button type="button" class="danger small-danger" data-delete-group="${group.id}">Elimina</button>
@@ -465,16 +482,31 @@ function renderTemplates() {
     return `<article class="template-card">
       <div class="template-card-head">
         <div><p class="eyebrow">FORMAE PROGRAMMAZIONE</p><h3>${escapeHtml(template.title)}</h3><span>${person ? escapeHtml(person.name) : "Scheda generale"}</span></div>
-        <div><button type="button" class="secondary" data-edit-template="${template.id}">Modifica</button><button type="button" class="small-danger" data-delete-template="${template.id}">Elimina</button></div>
+        <div>
+          <button type="button" class="secondary whatsapp-button" data-template-whatsapp="${template.id}">WhatsApp</button>
+          <button type="button" class="secondary" data-edit-template="${template.id}">Modifica</button>
+          <button type="button" class="small-danger" data-delete-template="${template.id}">Elimina</button>
+        </div>
       </div>
       <div class="template-table">
-        <div class="template-table-row template-table-head"><span>Allenamento</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span><span>Week</span></div>
+        <div class="template-table-row template-table-head"><span>Blocco</span><span>Allenamento</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span><span>Week</span></div>
         ${(template.rows || []).map((row) => `<div class="template-table-row">
-          <span>${escapeHtml(row.block || row.exercise)}</span><span>${escapeHtml(row.sets)}</span><span>${escapeHtml(row.reps)}</span><span>${escapeHtml(row.rest)}</span><span>${escapeHtml(row.notes)}</span><span>${escapeHtml(row.weeks)}</span>
+          <span>${escapeHtml(row.block)}</span><span>${escapeHtml(row.exercise)}</span><span>${escapeHtml(row.sets)}</span><span>${escapeHtml(row.reps)}</span><span>${escapeHtml(row.rest)}</span><span>${escapeHtml(row.notes)}</span><span>${escapeHtml(row.weeks)}</span>
         </div>`).join("")}
       </div>
     </article>`;
   }).join("") || `<div class="empty">Nessuna scheda creata.</div>`;
+}
+
+function templateWhatsappUrl(template) {
+  const person = state.data.people.find((item) => item.id === Number(template.person_id));
+  const phone = String(person?.phone || "").replace(/[^\d]/g, "");
+  if (!phone) return "";
+  const rows = (template.rows || []).map((row, index) =>
+    `${index + 1}. ${row.block ? `${row.block} - ` : ""}${row.exercise || "Esercizio"} | Serie ${row.sets || "-"} | Rip ${row.reps || "-"} | Rec ${row.rest || "-"}${row.notes ? ` | Note: ${row.notes}` : ""}${row.weeks ? ` | Week: ${row.weeks}` : ""}`
+  ).join("\n");
+  const message = `FORMAE - PROGRAMMAZIONE\n${template.title}\n${person ? `Cliente: ${person.name}\n` : ""}${template.notes ? `Note: ${template.notes}\n` : ""}\n${rows}\n${formaeWhatsappSignature()}`;
+  return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }
 
 function renderCatalog() {
@@ -953,8 +985,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.matches(".close")) event.target.closest("dialog").close();
   const calendarDay = event.target.closest("[data-calendar-day]");
   if (calendarDay) {
-    state.scheduleDate = calendarDay.dataset.calendarDay;
-    renderSchedule();
+    openDayDialog(calendarDay.dataset.calendarDay);
   }
   const workoutPerson = event.target.closest("[data-workout-person]");
   if (workoutPerson) {
@@ -1009,6 +1040,16 @@ document.addEventListener("click", async (event) => {
   if (editTemplateButton) {
     const template = (state.data.templates || []).find((item) => item.id === Number(editTemplateButton.dataset.editTemplate));
     if (template) openTemplateEdit(template);
+  }
+  const templateWhatsappButton = event.target.closest("[data-template-whatsapp]");
+  if (templateWhatsappButton) {
+    const template = (state.data.templates || []).find((item) => item.id === Number(templateWhatsappButton.dataset.templateWhatsapp));
+    if (template) {
+      const url = templateWhatsappUrl(template);
+      if (!url) return toast("Associa la scheda a una persona con telefono WhatsApp.");
+      window.open(url, "_blank", "noopener");
+      toast("WhatsApp aperto con la scheda.");
+    }
   }
   const deleteTemplateButton = event.target.closest("[data-delete-template]");
   if (deleteTemplateButton && confirm("Eliminare questa scheda?")) {
@@ -1151,9 +1192,9 @@ $("#schedule-form").addEventListener("submit", async (event) => {
       body:JSON.stringify({
         personId:Number(form.get("personId")),
         trainer:form.get("trainer"),
-        date:state.scheduleDate,
+        date:form.get("date") || state.scheduleDate,
         time:form.get("time"),
-        notes:form.get("notes")
+        notes:""
       })
     });
     resetScheduleForm();
@@ -1460,8 +1501,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v36")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v36", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v37")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v37", "1");
     window.location.reload();
   });
 }

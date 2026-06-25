@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=36">
+  <link rel="stylesheet" href="/style.css?v=37">
 </head>
 <body>
   <aside class="sidebar">
@@ -84,7 +84,7 @@
       <section class="schedule-panel page-panel">
         <div class="schedule-head">
           <div><p class="eyebrow">AGENDA</p><h2>Calendario allenamenti</h2></div>
-          <label>Giorno
+          <label>Giorno selezionato
             <input id="schedule-date" type="date">
           </label>
         </div>
@@ -103,8 +103,8 @@
           <label>Orario
             <input name="time" type="time" required>
           </label>
-          <label>Note
-            <input name="notes" placeholder="Es. recupero, obiettivo, sala">
+          <label>Data
+            <input name="date" id="schedule-form-date" type="date" required>
           </label>
           <div class="schedule-actions">
             <button class="secondary hidden" id="schedule-cancel-edit" type="button">Annulla</button>
@@ -381,6 +381,16 @@
     </div>
   </dialog>
 
+  <dialog id="day-dialog">
+    <div class="day-dialog-content">
+      <div class="modal-head">
+        <div><p class="eyebrow">DETTAGLIO GIORNO</p><h2 id="day-dialog-title">Calendario</h2></div>
+        <button type="button" class="close">Ã—</button>
+      </div>
+      <div id="day-dialog-list" class="schedule-list day-dialog-list"></div>
+    </div>
+  </dialog>
+
   <template id="exercise-template">
     <div class="exercise-row">
       <select class="body-area" aria-label="Zona del corpo">
@@ -422,7 +432,7 @@
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=36"></script>
+  <script src="/app.js?v=37"></script>
 </body>
 </html>
 

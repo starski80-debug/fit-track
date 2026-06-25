@@ -1,728 +1,727 @@
+const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
+const crypto = require("node:crypto");
+const { createStore, defaultCatalog } = require("./db");
 
-const defaultCatalog = {
-  Petto: ["Panca piana con bilanciere", "Panca inclinata con bilanciere", "Panca piana con manubri", "Panca inclinata con manubri", "Chest press", "Croci con manubri", "Croci ai cavi", "Dip per il petto", "Piegamenti"],
-  Dorso: ["Trazioni alla sbarra", "Lat machine", "Pulley basso", "Rematore con bilanciere", "Rematore con manubrio", "Rematore alla macchina", "Stacco da terra", "Pullover ai cavi", "Iperestensioni"],
-  Spalle: ["Military press", "Shoulder press", "Arnold press", "Lento avanti", "Alzate laterali", "Alzate frontali", "Alzate posteriori", "Face pull", "Tirate al mento"],
-  Braccia: ["Curl con bilanciere", "Curl con manubri", "Curl a martello", "Curl alla panca Scott", "Curl ai cavi", "French press", "Push down ai cavi", "Estensioni sopra la testa", "Dip per tricipiti", "Panca presa stretta"],
-  Gambe: ["Squat", "Front squat", "Pressa", "Affondi", "Bulgarian split squat", "Leg extension", "Leg curl", "Stacco rumeno", "Hip thrust", "Calf raise"],
-  Addome: ["Crunch", "Crunch inverso", "Plank", "Plank laterale", "Sit-up", "Leg raise", "Mountain climber", "Russian twist", "Ab wheel"],
-  Cardio: ["Corsa", "Camminata veloce", "Cyclette", "Ellittica", "Vogatore", "Salto con la corda", "Stepper", "Circuito HIIT"],
-  Altro: ["Mobilita", "Stretching", "Riscaldamento"]
-};
+const PORT = Number(process.env.PORT || 3000);
+const HOST = process.env.HOST || "0.0.0.0";
+const publicDir = path.join(__dirname, "public");
+const store = createStore();
+const appPassword = process.env.APP_PASSWORD || "";
+const authSecret = process.env.AUTH_SECRET || crypto.createHash("sha256").update(appPassword || "fittrack-local").digest("hex");
+const isProduction = Boolean(process.env.DATABASE_URL);
+const loginAttempts = new Map();
+const phases = new Set(["warmup", "main", "cooldown"]);
+let ready = false;
+let shuttingDown = false;
+const loginCleanup = setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of loginAttempts) {
+    if (value.resetAt <= now) loginAttempts.delete(key);
+  }
+}, 15 * 60_000);
+loginCleanup.unref();
 
-function createSqliteStore() {
-  const { DatabaseSync } = require("node:sqlite");
-  const dataDir = path.join(__dirname, "data");
-  fs.mkdirSync(dataDir, { recursive:true });
-  const db = new DatabaseSync(path.join(dataDir, "fittrack.db"));
-  db.exec(`
-    PRAGMA foreign_keys = ON;
-    PRAGMA journal_mode = WAL;
-    PRAGMA synchronous = NORMAL;
-    PRAGMA busy_timeout = 5000;
-    CREATE TABLE IF NOT EXISTS people (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#6c63ff', phone TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS groups (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#ffcc05',
-      notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS employees (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#ffcc05',
-      role TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS training_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      person_id INTEGER NOT NULL DEFAULT 0,
-      notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS template_rows (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      template_id INTEGER NOT NULL REFERENCES training_templates(id) ON DELETE CASCADE,
-      block TEXT NOT NULL DEFAULT '',
-      exercise TEXT NOT NULL DEFAULT '',
-      sets TEXT NOT NULL DEFAULT '',
-      reps TEXT NOT NULL DEFAULT '',
-      rest TEXT NOT NULL DEFAULT '',
-      notes TEXT NOT NULL DEFAULT '',
-      weeks TEXT NOT NULL DEFAULT '',
-      position INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE TABLE IF NOT EXISTS workouts (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-      workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0,
-      notes TEXT NOT NULL DEFAULT '', rpe INTEGER NOT NULL DEFAULT 0,
-      trainer TEXT NOT NULL DEFAULT '', rpe_token TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS exercises (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      workout_id INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
-      body_area TEXT NOT NULL, name TEXT NOT NULL, sets INTEGER NOT NULL DEFAULT 0,
-      reps INTEGER NOT NULL DEFAULT 0, weight REAL NOT NULL DEFAULT 0,
-      seconds INTEGER NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'main'
-    );
-    CREATE TABLE IF NOT EXISTS exercise_catalog (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, body_area TEXT NOT NULL, name TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(body_area, name)
-    );
-    CREATE TABLE IF NOT EXISTS scheduled_sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-      scheduled_date TEXT NOT NULL,
-      scheduled_time TEXT NOT NULL DEFAULT '',
-      trainer TEXT NOT NULL DEFAULT '',
-      notes TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'scheduled',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
-    CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
-    CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
-    CREATE INDEX IF NOT EXISTS idx_schedule_date_time ON scheduled_sessions(scheduled_date, scheduled_time);
-  `);
-  const columns = db.prepare("PRAGMA table_info(people)").all().map((item) => item.name);
-  for (const [name, definition] of [
-    ["birth_date", "TEXT NOT NULL DEFAULT ''"], ["height", "REAL NOT NULL DEFAULT 0"],
-    ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"],
-    ["phone", "TEXT NOT NULL DEFAULT ''"], ["group_id", "INTEGER NOT NULL DEFAULT 0"]
-  ]) {
-    if (!columns.includes(name)) db.exec(`ALTER TABLE people ADD COLUMN ${name} ${definition}`);
-  }
-  const workoutColumns = db.prepare("PRAGMA table_info(workouts)").all().map((item) => item.name);
-  for (const [name, definition] of [
-    ["rpe", "INTEGER NOT NULL DEFAULT 0"], ["trainer", "TEXT NOT NULL DEFAULT ''"],
-    ["rpe_token", "TEXT NOT NULL DEFAULT ''"]
-  ]) {
-    if (!workoutColumns.includes(name)) db.exec(`ALTER TABLE workouts ADD COLUMN ${name} ${definition}`);
-  }
-  const exerciseColumns = db.prepare("PRAGMA table_info(exercises)").all().map((item) => item.name);
-  for (const [name, definition] of [
-    ["seconds", "INTEGER NOT NULL DEFAULT 0"], ["phase", "TEXT NOT NULL DEFAULT 'main'"]
-  ]) {
-    if (!exerciseColumns.includes(name)) db.exec(`ALTER TABLE exercises ADD COLUMN ${name} ${definition}`);
-  }
-  db.exec(`
-    UPDATE exercises SET body_area = 'Dorso' WHERE body_area = 'Schiena';
-    UPDATE exercise_catalog SET body_area = 'Dorso' WHERE body_area = 'Schiena';
-  `);
-  if (workoutColumns.includes("operator") && !workoutColumns.includes("trainer")) {
-    db.exec("UPDATE workouts SET trainer = operator WHERE trainer = '' AND operator <> ''");
-  }
-
-  return {
-    type:"sqlite",
-    async ping() { db.prepare("SELECT 1 AS ok").get(); return true; },
-    async close() { db.close(); },
-    async init() {
-      const insert = db.prepare("INSERT OR IGNORE INTO exercise_catalog (body_area, name) VALUES (?, ?)");
-      for (const [area, names] of Object.entries(defaultCatalog)) {
-        for (const name of names) insert.run(area, name);
-      }
-    },
-    async dashboard() {
-      const people = db.prepare("SELECT * FROM people ORDER BY name").all();
-      const groups = db.prepare("SELECT * FROM groups ORDER BY name COLLATE NOCASE").all();
-      const employees = db.prepare("SELECT * FROM employees ORDER BY name COLLATE NOCASE").all();
-      const catalog = db.prepare("SELECT * FROM exercise_catalog ORDER BY body_area, name COLLATE NOCASE").all();
-      const templates = db.prepare("SELECT * FROM training_templates ORDER BY created_at DESC, id DESC").all();
-      const templateRows = db.prepare("SELECT * FROM template_rows WHERE template_id = ? ORDER BY position, id");
-      const schedule = db.prepare(`
-        SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
-        FROM scheduled_sessions s JOIN people p ON p.id = s.person_id
-        ORDER BY s.scheduled_date ASC, s.scheduled_time ASC, s.id ASC
-      `).all();
-      const workouts = db.prepare(`
-        SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        ORDER BY w.workout_date DESC, w.id DESC
-      `).all();
-      const exercises = db.prepare("SELECT * FROM exercises WHERE workout_id = ? ORDER BY id");
-      return {
-        people, groups, employees, catalog, schedule,
-        templates:templates.map((item) => ({ ...item, rows:templateRows.all(item.id) })),
-        workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) }))
-      };
-    },
-    async addPerson(body) {
-      return Number(db.prepare(`
-        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId).lastInsertRowid);
-    },
-    async updatePerson(id, body) {
-      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=? WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id).changes > 0;
-    },
-    async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
-    async addGroup(body) {
-      return Number(db.prepare("INSERT INTO groups (name, color, notes) VALUES (?, ?, ?)").run(body.name, body.color, body.notes).lastInsertRowid);
-    },
-    async updateGroup(id, body) {
-      return db.prepare("UPDATE groups SET name=?, color=?, notes=? WHERE id=?").run(body.name, body.color, body.notes, id).changes > 0;
-    },
-    async deleteGroup(id) {
-      db.prepare("UPDATE people SET group_id=0 WHERE group_id=?").run(id);
-      return db.prepare("DELETE FROM groups WHERE id=?").run(id).changes > 0;
-    },
-    async addEmployee(body) {
-      return Number(db.prepare("INSERT INTO employees (name, color, role) VALUES (?, ?, ?)").run(body.name, body.color, body.role).lastInsertRowid);
-    },
-    async updateEmployee(id, body) {
-      return db.prepare("UPDATE employees SET name=?, color=?, role=? WHERE id=?").run(body.name, body.color, body.role, id).changes > 0;
-    },
-    async deleteEmployee(id) { return db.prepare("DELETE FROM employees WHERE id=?").run(id).changes > 0; },
-    async addTemplate(body) {
-      db.exec("BEGIN");
-      try {
-        const id = Number(db.prepare("INSERT INTO training_templates (title, person_id, notes) VALUES (?, ?, ?)").run(body.title, body.personId, body.notes).lastInsertRowid);
-        const insert = db.prepare("INSERT INTO template_rows (template_id, block, exercise, sets, reps, rest, notes, weeks, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        body.rows.forEach((row, index) => insert.run(id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index));
-        db.exec("COMMIT");
-        return id;
-      } catch (error) { db.exec("ROLLBACK"); throw error; }
-    },
-    async updateTemplate(id, body) {
-      db.exec("BEGIN");
-      try {
-        const changes = db.prepare("UPDATE training_templates SET title=?, person_id=?, notes=? WHERE id=?").run(body.title, body.personId, body.notes, id).changes;
-        if (!changes) { db.exec("ROLLBACK"); return false; }
-        db.prepare("DELETE FROM template_rows WHERE template_id=?").run(id);
-        const insert = db.prepare("INSERT INTO template_rows (template_id, block, exercise, sets, reps, rest, notes, weeks, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        body.rows.forEach((row, index) => insert.run(id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index));
-        db.exec("COMMIT");
-        return true;
-      } catch (error) { db.exec("ROLLBACK"); throw error; }
-    },
-    async deleteTemplate(id) { return db.prepare("DELETE FROM training_templates WHERE id=?").run(id).changes > 0; },
-    async addCatalog(area, name) {
-      return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
-    },
-    async deleteCatalog(id) { return db.prepare("DELETE FROM exercise_catalog WHERE id=?").run(id).changes > 0; },
-    async addSchedule(body) {
-      return Number(db.prepare(`
-        INSERT INTO scheduled_sessions (person_id, scheduled_date, scheduled_time, trainer, notes, status)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(body.personId, body.date, body.time, body.trainer, body.notes, body.status).lastInsertRowid);
-    },
-    async updateSchedule(id, body) {
-      return db.prepare(`
-        UPDATE scheduled_sessions
-        SET person_id=?, scheduled_date=?, scheduled_time=?, trainer=?, notes=?, status=?
-        WHERE id=?
-      `).run(body.personId, body.date, body.time, body.trainer, body.notes, body.status, id).changes > 0;
-    },
-    async deleteSchedule(id) {
-      return db.prepare("DELETE FROM scheduled_sessions WHERE id=?").run(id).changes > 0;
-    },
-    async addWorkout(body) {
-      db.exec("BEGIN");
-      try {
-        const id = Number(db.prepare(`
-          INSERT INTO workouts (person_id, workout_date, duration, notes, rpe, trainer) VALUES (?, ?, ?, ?, ?, ?)
-        `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator).lastInsertRowid);
-        const insert = db.prepare(`
-          INSERT INTO exercises (workout_id, body_area, name, sets, reps, weight, seconds, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const item of body.exercises) insert.run(id, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase);
-        db.exec("COMMIT");
-        return id;
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    async updateWorkout(id, body) {
-      db.exec("BEGIN");
-      try {
-        const changes = db.prepare(`
-          UPDATE workouts SET person_id=?, workout_date=?, duration=?, notes=?, rpe=?, trainer=? WHERE id=?
-        `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, id).changes;
-        if (!changes) {
-          db.exec("ROLLBACK");
-          return false;
-        }
-        db.prepare("DELETE FROM exercises WHERE workout_id=?").run(id);
-        const insert = db.prepare(`
-          INSERT INTO exercises (workout_id, body_area, name, sets, reps, weight, seconds, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const item of body.exercises) insert.run(id, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase);
-        db.exec("COMMIT");
-        return true;
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    async updateWorkoutGroup(ids, body) {
-      const targetId = Number(ids[0]);
-      db.exec("BEGIN");
-      try {
-        const placeholders = ids.map(() => "?").join(",");
-        const existing = db.prepare(`SELECT id FROM workouts WHERE id IN (${placeholders}) ORDER BY id`).all(...ids);
-        if (!existing.length) {
-          db.exec("ROLLBACK");
-          return false;
-        }
-        db.prepare(`
-          UPDATE workouts SET person_id=?, workout_date=?, duration=?, notes=?, rpe=?, trainer=? WHERE id=?
-        `).run(body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, targetId);
-        db.prepare("DELETE FROM exercises WHERE workout_id=?").run(targetId);
-        const insert = db.prepare(`
-          INSERT INTO exercises (workout_id, body_area, name, sets, reps, weight, seconds, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const item of body.exercises) insert.run(targetId, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase);
-        const extraIds = ids.filter((id) => Number(id) !== targetId);
-        if (extraIds.length) {
-          db.prepare(`DELETE FROM workouts WHERE id IN (${extraIds.map(() => "?").join(",")})`).run(...extraIds);
-        }
-        db.exec("COMMIT");
-        return true;
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-    },
-    async prepareRpeLink(id, token) {
-      db.prepare("UPDATE workouts SET rpe_token=CASE WHEN rpe_token = '' THEN ? ELSE rpe_token END WHERE id=?").run(token, id);
-      return db.prepare(`
-        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.id = ?
-      `).get(id) || null;
-    },
-    async prepareRpeGroupLink(ids, token) {
-      const placeholders = ids.map(() => "?").join(",");
-      const rows = db.prepare(`
-        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.id IN (${placeholders})
-        ORDER BY w.workout_date DESC, w.id
-      `).all(...ids);
-      if (!rows.length) return null;
-      const sharedToken = rows.find((item) => item.rpe_token)?.rpe_token || token;
-      db.prepare(`UPDATE workouts SET rpe_token=? WHERE id IN (${placeholders})`).run(sharedToken, ...ids);
-      return { ...rows[0], rpe_token:sharedToken };
-    },
-    async workoutByRpeToken(token) {
-      return db.prepare(`
-        SELECT w.id, w.workout_date, w.rpe, w.rpe_token, p.name AS person_name
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.rpe_token = ?
-      `).get(token) || null;
-    },
-    async setRpeByToken(token, rpe) {
-      return db.prepare("UPDATE workouts SET rpe=? WHERE rpe_token=?").run(rpe, token).changes > 0;
-    },
-    async deleteWorkout(id) { return db.prepare("DELETE FROM workouts WHERE id=?").run(id).changes > 0; }
-  };
+if (isProduction && (!appPassword || appPassword.length < 10)) {
+  throw new Error("Su Railway devi configurare APP_PASSWORD con almeno 10 caratteri.");
 }
 
-function createPostgresStore() {
-  const { Pool } = require("pg");
-  const sslEnabled = ["require", "verify-ca", "verify-full"].includes(process.env.PGSSLMODE) ||
-    /[?&]sslmode=(require|verify-ca|verify-full)/.test(process.env.DATABASE_URL);
-  const pool = new Pool({
-    connectionString:process.env.DATABASE_URL,
-    ssl:sslEnabled ? { rejectUnauthorized:false } : false,
-    max:Number(process.env.PG_POOL_MAX || 8),
-    idleTimeoutMillis:30_000,
-    connectionTimeoutMillis:10_000,
-    statement_timeout:15_000,
-    query_timeout:20_000,
-    allowExitOnIdle:false
+const json = (res, status, body, headers = {}) => {
+  if (res.writableEnded) return;
+  res.writeHead(status, {
+    "Content-Type":"application/json; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    ...headers
   });
-  pool.on("error", (error) => console.error("Errore PostgreSQL inatteso:", error.message));
-  const query = (text, params = []) => pool.query(text, params);
+  res.end(JSON.stringify(body));
+};
 
-  return {
-    type:"postgres",
-    async ping() {
-      const result = await query("SELECT 1 AS ok");
-      return result.rows[0]?.ok === 1;
-    },
-    async close() { await pool.end(); },
-    async init() {
-      await query(`
-        CREATE TABLE IF NOT EXISTS people (
-          id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6c63ff',
-          birth_date TEXT NOT NULL DEFAULT '', height DOUBLE PRECISION NOT NULL DEFAULT 0,
-          weight DOUBLE PRECISION NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
-          phone TEXT NOT NULL DEFAULT '',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS groups (
-          id BIGSERIAL PRIMARY KEY,
-          name TEXT NOT NULL,
-          color TEXT NOT NULL DEFAULT '#ffcc05',
-          notes TEXT NOT NULL DEFAULT '',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS employees (
-          id BIGSERIAL PRIMARY KEY,
-          name TEXT NOT NULL,
-          color TEXT NOT NULL DEFAULT '#ffcc05',
-          role TEXT NOT NULL DEFAULT '',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS training_templates (
-          id BIGSERIAL PRIMARY KEY,
-          title TEXT NOT NULL,
-          person_id BIGINT NOT NULL DEFAULT 0,
-          notes TEXT NOT NULL DEFAULT '',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS template_rows (
-          id BIGSERIAL PRIMARY KEY,
-          template_id BIGINT NOT NULL REFERENCES training_templates(id) ON DELETE CASCADE,
-          block TEXT NOT NULL DEFAULT '',
-          exercise TEXT NOT NULL DEFAULT '',
-          sets TEXT NOT NULL DEFAULT '',
-          reps TEXT NOT NULL DEFAULT '',
-          rest TEXT NOT NULL DEFAULT '',
-          notes TEXT NOT NULL DEFAULT '',
-          weeks TEXT NOT NULL DEFAULT '',
-          position INTEGER NOT NULL DEFAULT 0
-        );
-        CREATE TABLE IF NOT EXISTS workouts (
-          id BIGSERIAL PRIMARY KEY, person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-          workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
-          rpe INTEGER NOT NULL DEFAULT 0, trainer TEXT NOT NULL DEFAULT '',
-          rpe_token TEXT NOT NULL DEFAULT '',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        CREATE TABLE IF NOT EXISTS exercises (
-          id BIGSERIAL PRIMARY KEY, workout_id BIGINT NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
-          body_area TEXT NOT NULL, name TEXT NOT NULL, sets INTEGER NOT NULL DEFAULT 0,
-          reps INTEGER NOT NULL DEFAULT 0, weight DOUBLE PRECISION NOT NULL DEFAULT 0,
-          seconds INTEGER NOT NULL DEFAULT 0, phase TEXT NOT NULL DEFAULT 'main'
-        );
-        CREATE TABLE IF NOT EXISTS exercise_catalog (
-          id BIGSERIAL PRIMARY KEY, body_area TEXT NOT NULL, name TEXT NOT NULL,
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), UNIQUE(body_area, name)
-        );
-        CREATE TABLE IF NOT EXISTS scheduled_sessions (
-          id BIGSERIAL PRIMARY KEY,
-          person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
-          scheduled_date TEXT NOT NULL,
-          scheduled_time TEXT NOT NULL DEFAULT '',
-          trainer TEXT NOT NULL DEFAULT '',
-          notes TEXT NOT NULL DEFAULT '',
-          status TEXT NOT NULL DEFAULT 'scheduled',
-          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS birth_date TEXT NOT NULL DEFAULT '';
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS height DOUBLE PRECISION NOT NULL DEFAULT 0;
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
-        ALTER TABLE people ADD COLUMN IF NOT EXISTS group_id BIGINT NOT NULL DEFAULT 0;
-        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
-        ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe_token TEXT NOT NULL DEFAULT '';
-        ALTER TABLE exercises ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
-        ALTER TABLE exercises ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'main';
-        DO $$
-        BEGIN
-          IF EXISTS (
-            SELECT 1 FROM information_schema.columns
-            WHERE table_name = 'workouts' AND column_name = 'operator'
-          ) THEN
-            EXECUTE 'UPDATE workouts SET trainer = "operator" WHERE trainer = '''' AND "operator" <> ''''';
-          END IF;
-        END $$;
-        UPDATE exercises SET body_area = 'Dorso' WHERE body_area = 'Schiena';
-        UPDATE exercise_catalog SET body_area = 'Dorso' WHERE body_area = 'Schiena';
-        CREATE INDEX IF NOT EXISTS idx_workouts_person_date ON workouts(person_id, workout_date DESC);
-        CREATE INDEX IF NOT EXISTS idx_exercises_workout ON exercises(workout_id);
-        CREATE INDEX IF NOT EXISTS idx_catalog_area_name ON exercise_catalog(body_area, name);
-        CREATE INDEX IF NOT EXISTS idx_schedule_date_time ON scheduled_sessions(scheduled_date, scheduled_time);
-      `);
-      for (const [area, names] of Object.entries(defaultCatalog)) {
-        for (const name of names) {
-          await query(
-            "INSERT INTO exercise_catalog (body_area, name) VALUES ($1,$2) ON CONFLICT (body_area, name) DO NOTHING",
-            [area, name]
-          );
-        }
-      }
-    },
-    async dashboard() {
-      const [people, groups, employees, catalog, schedule, workouts, exercises, templates, templateRows] = await Promise.all([
-        query("SELECT * FROM people ORDER BY name"),
-        query("SELECT * FROM groups ORDER BY LOWER(name)"),
-        query("SELECT * FROM employees ORDER BY LOWER(name)"),
-        query("SELECT * FROM exercise_catalog ORDER BY body_area, LOWER(name)"),
-        query(`SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
-          FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
-          ORDER BY s.scheduled_date ASC, s.scheduled_time ASC, s.id ASC`),
-        query(`SELECT w.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
-          FROM workouts w JOIN people p ON p.id=w.person_id
-          ORDER BY w.workout_date DESC, w.id DESC`),
-        query("SELECT * FROM exercises ORDER BY id"),
-        query("SELECT * FROM training_templates ORDER BY created_at DESC, id DESC"),
-        query("SELECT * FROM template_rows ORDER BY position, id")
-      ]);
-      const byWorkout = new Map();
-      for (const exercise of exercises.rows) {
-        const key = String(exercise.workout_id);
-        if (!byWorkout.has(key)) byWorkout.set(key, []);
-        byWorkout.get(key).push(exercise);
-      }
-      const rowsByTemplate = new Map();
-      for (const row of templateRows.rows) {
-        const key = String(row.template_id);
-        if (!rowsByTemplate.has(key)) rowsByTemplate.set(key, []);
-        rowsByTemplate.get(key).push({ ...row, id:Number(row.id), template_id:Number(row.template_id) });
-      }
-      return {
-        people:people.rows.map((item) => ({ ...item, id:Number(item.id), group_id:Number(item.group_id || 0) })),
-        groups:groups.rows.map((item) => ({ ...item, id:Number(item.id) })),
-        employees:employees.rows.map((item) => ({ ...item, id:Number(item.id) })),
-        catalog:catalog.rows.map((item) => ({ ...item, id:Number(item.id) })),
-        schedule:schedule.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id) })),
-        templates:templates.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id || 0), rows:rowsByTemplate.get(String(item.id)) || [] })),
-        workouts:workouts.rows.map((item) => ({
-          ...item,
-          id:Number(item.id),
-          person_id:Number(item.person_id),
-          exercises:(byWorkout.get(String(item.id)) || []).map((exercise) => ({
-            ...exercise,
-            id:Number(exercise.id),
-            workout_id:Number(exercise.workout_id)
-          }))
-        }))
-      };
-    },
-    async addPerson(body) {
-      const result = await query(`
-        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
-      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId]);
-      return Number(result.rows[0].id);
-    },
-    async updatePerson(id, body) {
-      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8 WHERE id=$9`,
-        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id]);
-      return result.rowCount > 0;
-    },
-    async deletePerson(id) {
-      const result = await query("DELETE FROM people WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addGroup(body) {
-      const result = await query("INSERT INTO groups (name,color,notes) VALUES ($1,$2,$3) RETURNING id", [body.name, body.color, body.notes]);
-      return Number(result.rows[0].id);
-    },
-    async updateGroup(id, body) {
-      const result = await query("UPDATE groups SET name=$1,color=$2,notes=$3 WHERE id=$4", [body.name, body.color, body.notes, id]);
-      return result.rowCount > 0;
-    },
-    async deleteGroup(id) {
-      await query("UPDATE people SET group_id=0 WHERE group_id=$1", [id]);
-      const result = await query("DELETE FROM groups WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addEmployee(body) {
-      const result = await query("INSERT INTO employees (name,color,role) VALUES ($1,$2,$3) RETURNING id", [body.name, body.color, body.role]);
-      return Number(result.rows[0].id);
-    },
-    async updateEmployee(id, body) {
-      const result = await query("UPDATE employees SET name=$1,color=$2,role=$3 WHERE id=$4", [body.name, body.color, body.role, id]);
-      return result.rowCount > 0;
-    },
-    async deleteEmployee(id) {
-      const result = await query("DELETE FROM employees WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addTemplate(body) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const result = await client.query("INSERT INTO training_templates (title,person_id,notes) VALUES ($1,$2,$3) RETURNING id", [body.title, body.personId, body.notes]);
-        const id = Number(result.rows[0].id);
-        for (const [index, row] of body.rows.entries()) {
-          await client.query("INSERT INTO template_rows (template_id,block,exercise,sets,reps,rest,notes,weeks,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index]);
-        }
-        await client.query("COMMIT");
-        return id;
-      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    },
-    async updateTemplate(id, body) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const result = await client.query("UPDATE training_templates SET title=$1,person_id=$2,notes=$3 WHERE id=$4", [body.title, body.personId, body.notes, id]);
-        if (!result.rowCount) { await client.query("ROLLBACK"); return false; }
-        await client.query("DELETE FROM template_rows WHERE template_id=$1", [id]);
-        for (const [index, row] of body.rows.entries()) {
-          await client.query("INSERT INTO template_rows (template_id,block,exercise,sets,reps,rest,notes,weeks,position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)", [id, row.block, row.exercise, row.sets, row.reps, row.rest, row.notes, row.weeks, index]);
-        }
-        await client.query("COMMIT");
-        return true;
-      } catch (error) { await client.query("ROLLBACK"); throw error; } finally { client.release(); }
-    },
-    async deleteTemplate(id) {
-      const result = await query("DELETE FROM training_templates WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addCatalog(area, name) {
-      const result = await query("INSERT INTO exercise_catalog (body_area,name) VALUES ($1,$2) RETURNING id", [area, name]);
-      return Number(result.rows[0].id);
-    },
-    async deleteCatalog(id) {
-      const result = await query("DELETE FROM exercise_catalog WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addSchedule(body) {
-      const result = await query(`
-        INSERT INTO scheduled_sessions (person_id,scheduled_date,scheduled_time,trainer,notes,status)
-        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-      `, [body.personId, body.date, body.time, body.trainer, body.notes, body.status]);
-      return Number(result.rows[0].id);
-    },
-    async updateSchedule(id, body) {
-      const result = await query(`
-        UPDATE scheduled_sessions
-        SET person_id=$1,scheduled_date=$2,scheduled_time=$3,trainer=$4,notes=$5,status=$6
-        WHERE id=$7
-      `, [body.personId, body.date, body.time, body.trainer, body.notes, body.status, id]);
-      return result.rowCount > 0;
-    },
-    async deleteSchedule(id) {
-      const result = await query("DELETE FROM scheduled_sessions WHERE id=$1", [id]);
-      return result.rowCount > 0;
-    },
-    async addWorkout(body) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const result = await client.query(`
-          INSERT INTO workouts (person_id,workout_date,duration,notes,rpe,trainer) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
-        `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator]);
-        const id = Number(result.rows[0].id);
-        for (const item of body.exercises) {
-          await client.query(`
-            INSERT INTO exercises (workout_id,body_area,name,sets,reps,weight,seconds,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          `, [id, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase]);
-        }
-        await client.query("COMMIT");
-        return id;
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
-    async updateWorkout(id, body) {
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const result = await client.query(`
-          UPDATE workouts SET person_id=$1,workout_date=$2,duration=$3,notes=$4,rpe=$5,trainer=$6 WHERE id=$7
-        `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, id]);
-        if (!result.rowCount) {
-          await client.query("ROLLBACK");
-          return false;
-        }
-        await client.query("DELETE FROM exercises WHERE workout_id=$1", [id]);
-        for (const item of body.exercises) {
-          await client.query(`
-            INSERT INTO exercises (workout_id,body_area,name,sets,reps,weight,seconds,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          `, [id, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase]);
-        }
-        await client.query("COMMIT");
-        return true;
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
-    async updateWorkoutGroup(ids, body) {
-      const targetId = Number(ids[0]);
-      const client = await pool.connect();
-      try {
-        await client.query("BEGIN");
-        const existing = await client.query("SELECT id FROM workouts WHERE id = ANY($1::bigint[]) ORDER BY id", [ids]);
-        if (!existing.rowCount) {
-          await client.query("ROLLBACK");
-          return false;
-        }
-        await client.query(`
-          UPDATE workouts SET person_id=$1,workout_date=$2,duration=$3,notes=$4,rpe=$5,trainer=$6 WHERE id=$7
-        `, [body.personId, body.date, body.duration, body.notes, body.rpe, body.operator, targetId]);
-        await client.query("DELETE FROM exercises WHERE workout_id=$1", [targetId]);
-        for (const item of body.exercises) {
-          await client.query(`
-            INSERT INTO exercises (workout_id,body_area,name,sets,reps,weight,seconds,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-          `, [targetId, item.bodyArea, item.name, item.sets, item.reps, item.weight, item.seconds, item.phase]);
-        }
-        const extraIds = ids.filter((id) => Number(id) !== targetId);
-        if (extraIds.length) await client.query("DELETE FROM workouts WHERE id = ANY($1::bigint[])", [extraIds]);
-        await client.query("COMMIT");
-        return true;
-      } catch (error) {
-        await client.query("ROLLBACK");
-        throw error;
-      } finally {
-        client.release();
-      }
-    },
-    async prepareRpeLink(id, token) {
-      await query("UPDATE workouts SET rpe_token=CASE WHEN rpe_token = '' THEN $1 ELSE rpe_token END WHERE id=$2", [token, id]);
-      const result = await query(`
-        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.id=$1
-      `, [id]);
-      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id) } : null;
-    },
-    async prepareRpeGroupLink(ids, token) {
-      const current = await query(`
-        SELECT w.id, w.workout_date, w.rpe_token, p.name AS person_name, p.phone AS person_phone
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.id = ANY($1::bigint[])
-        ORDER BY w.workout_date DESC, w.id
-      `, [ids]);
-      if (!current.rowCount) return null;
-      const sharedToken = current.rows.find((item) => item.rpe_token)?.rpe_token || token;
-      await query("UPDATE workouts SET rpe_token=$1 WHERE id = ANY($2::bigint[])", [sharedToken, ids]);
-      return { ...current.rows[0], id:Number(current.rows[0].id), rpe_token:sharedToken };
-    },
-    async workoutByRpeToken(token) {
-      const result = await query(`
-        SELECT w.id, w.workout_date, w.rpe, w.rpe_token, p.name AS person_name
-        FROM workouts w JOIN people p ON p.id = w.person_id
-        WHERE w.rpe_token=$1
-      `, [token]);
-      return result.rows[0] ? { ...result.rows[0], id:Number(result.rows[0].id) } : null;
-    },
-    async setRpeByToken(token, rpe) {
-      const result = await query("UPDATE workouts SET rpe=$1 WHERE rpe_token=$2", [rpe, token]);
-      return result.rowCount > 0;
-    },
-    async deleteWorkout(id) {
-      const result = await query("DELETE FROM workouts WHERE id=$1", [id]);
-      return result.rowCount > 0;
+const readBody = (req) => new Promise((resolve, reject) => {
+  let raw = "";
+  let settled = false;
+  const fail = (status, message) => {
+    if (settled) return;
+    settled = true;
+    const error = new Error(message);
+    error.status = status;
+    reject(error);
+  };
+  req.on("data", (chunk) => {
+    if (settled) return;
+    raw += chunk;
+    if (Buffer.byteLength(raw) > 1_000_000) fail(413, "Richiesta troppo grande.");
+  });
+  req.on("end", () => {
+    if (settled) return;
+    settled = true;
+    try { resolve(raw ? JSON.parse(raw) : {}); } catch {
+      const error = new Error("Dati JSON non validi.");
+      error.status = 400;
+      reject(error);
     }
+  });
+  req.on("error", () => fail(400, "Richiesta non valida."));
+});
+
+function secureEqual(left, right) {
+  const a = Buffer.from(String(left));
+  const b = Buffer.from(String(right));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function authToken() {
+  return crypto.createHmac("sha256", authSecret).update("fittrack-auth-v1").digest("hex");
+}
+
+function cookies(req) {
+  return Object.fromEntries((req.headers.cookie || "").split(";").map((part) => {
+    const index = part.indexOf("=");
+    return index < 0 ? ["", ""] : [part.slice(0, index).trim(), decodeURIComponent(part.slice(index + 1))];
+  }).filter(([key]) => key));
+}
+
+function isAuthenticated(req) {
+  if (!appPassword) return true;
+  return secureEqual(cookies(req).fittrack_session || "", authToken());
+}
+
+function cookieHeader(value, maxAge) {
+  return `fittrack_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${isProduction ? "; Secure" : ""}`;
+}
+
+function cleanText(value, maxLength) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function cleanPhone(value) {
+  return String(value || "").replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "").slice(0, 30);
+}
+
+function finiteNumber(value, min, max) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, number)) : 0;
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : 0;
+}
+
+function validDate(value) {
+  const date = String(value || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+}
+
+function normalizePerson(body) {
+  return {
+    name:cleanText(body.name, 100),
+    color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#6c63ff",
+    birthDate:body.birthDate ? validDate(body.birthDate) : "",
+    height:finiteNumber(body.height, 0, 300),
+    weight:finiteNumber(body.weight, 0, 1_000),
+    notes:cleanText(body.notes, 2_000),
+    phone:cleanPhone(body.phone),
+    groupId:positiveInteger(body.groupId)
   };
 }
 
-module.exports = {
-  defaultCatalog,
-  createStore:() => process.env.DATABASE_URL ? createPostgresStore() : createSqliteStore()
-};
+function normalizeGroup(body) {
+  return {
+    name:cleanText(body.name, 100),
+    color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#ffcc05",
+    notes:cleanText(body.notes, 1_000)
+  };
+}
+
+function normalizeWorkout(body) {
+  return {
+    personId:positiveInteger(body.personId),
+    date:validDate(body.date),
+    duration:finiteNumber(body.duration, 0, 1_440),
+    rpe:finiteNumber(body.rpe, 0, 10),
+    operator:cleanText(body.operator, 100),
+    notes:cleanText(body.notes, 2_000),
+    exercises:(Array.isArray(body.exercises) ? body.exercises.slice(0, 100) : [])
+      .map((item) => ({
+        phase:phases.has(item.phase) ? item.phase : "main",
+        bodyArea:cleanText(item.bodyArea, 50) || "Altro",
+        name:cleanText(item.name, 150),
+        sets:finiteNumber(item.sets, 0, 1_000),
+        reps:finiteNumber(item.reps, 0, 10_000),
+        weight:finiteNumber(item.weight, 0, 10_000),
+        seconds:finiteNumber(item.seconds, 0, 10_000)
+      })).filter((item) => item.name)
+  };
+}
+
+function normalizeSchedule(body) {
+  const time = String(body.time || "").trim();
+  return {
+    personId:positiveInteger(body.personId),
+    date:validDate(body.date),
+    time:/^\d{2}:\d{2}$/.test(time) ? time : "",
+    trainer:cleanText(body.trainer, 100),
+    notes:cleanText(body.notes, 500),
+    status:["scheduled", "done"].includes(body.status) ? body.status : "scheduled"
+  };
+}
+
+function normalizeEmployee(body) {
+  return {
+    name:cleanText(body.name, 100),
+    color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#ffcc05",
+    role:cleanText(body.role, 100)
+  };
+}
+
+function normalizeTemplate(body) {
+  return {
+    title:cleanText(body.title, 150),
+    personId:positiveInteger(body.personId),
+    notes:cleanText(body.notes, 2_000),
+    rows:(Array.isArray(body.rows) ? body.rows.slice(0, 80) : []).map((row) => ({
+      block:cleanText(row.block, 50),
+      exercise:cleanText(row.exercise, 150),
+      sets:cleanText(row.sets, 50),
+      reps:cleanText(row.reps, 50),
+      rest:cleanText(row.rest, 50),
+      notes:cleanText(row.notes, 500),
+      weeks:cleanText(row.weeks, 500)
+    })).filter((row) => row.exercise || row.block || row.notes)
+  };
+}
+
+function normalizeWorkoutIds(value) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map(positiveInteger)
+    .filter(Boolean))]
+    .slice(0, 20);
+}
+
+function clientAddress(req) {
+  return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
+}
+
+function loginAllowed(req) {
+  const key = clientAddress(req);
+  const now = Date.now();
+  const current = loginAttempts.get(key);
+  if (!current || current.resetAt <= now) {
+    loginAttempts.set(key, { count:0, resetAt:now + 15 * 60_000 });
+    return true;
+  }
+  return current.count < 10;
+}
+
+function registerFailedLogin(req) {
+  const key = clientAddress(req);
+  const current = loginAttempts.get(key) || { count:0, resetAt:Date.now() + 15 * 60_000 };
+  current.count += 1;
+  loginAttempts.set(key, current);
+}
+
+function clearLoginAttempts(req) {
+  loginAttempts.delete(clientAddress(req));
+}
+
+function publicBaseUrl(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || (isProduction ? "https" : "http")).split(",")[0];
+  return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
+}
+
+function formaeWhatsappSignature() {
+  return `\n\nFormae - La tua forza, il tuo potenziale`;
+}
+
+function whatsappNumber(value) {
+  return String(value || "").replace(/[^\d]/g, "");
+}
+
+function rpeHtml(workout) {
+  const rows = [
+    [10, "Maximum Effort", "#df0900"],
+    [9, "Extremely Hard", "#ff5a00"],
+    [8, "Really Hard", "#ffa400"],
+    [7, "Hard", "#ffc043"],
+    [6, "Sort of Hard", "#5b7f1c"],
+    [5, "Challenging", "#9bd22d"],
+    [4, "Moderate", "#c7e783"],
+    [3, "Comfortable", "#0878ff"],
+    [2, "Easy", "#63a8f4"],
+    [1, "Very Easy", "#99c1f2"],
+    [0, "Rest", "#f5f5f5"]
+  ];
+  return `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FitTrack - RPE</title>
+  <style>
+    :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin:0; background:#f4f6fb; color:#081735; }
+    main { max-width:430px; margin:0 auto; padding:18px 10px 28px; }
+    .card { background:#fff; border:1px solid #dde3f0; border-radius:14px; overflow:hidden; box-shadow:0 18px 45px rgba(8,23,53,.08); }
+    header { padding:22px 20px; background:#081735; color:#fff; }
+    h1 { margin:0 0 6px; font-size:26px; }
+    p { margin:0; color:#63708d; line-height:1.45; }
+    header p { color:#cdd6ea; }
+    .table { display:grid; border-top:1px solid rgba(8,23,53,.14); }
+    button { width:100%; min-height:48px; border:0; border-bottom:1px solid rgba(8,23,53,.08); padding:11px 24px; text-align:left; font:inherit; font-size:23px; line-height:1.1; cursor:pointer; color:#101820; }
+    button:active { transform:scale(.99); }
+    button:focus-visible { outline:3px solid #081735; outline-offset:-5px; }
+    button:disabled { cursor:wait; opacity:.72; }
+    .result { padding:18px 20px 20px; font-weight:700; color:#1b8b5a; }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="card">
+      <header>
+        <h1>RPE - sforzo percepito</h1>
+        <p>${escapeHtml(workout.person_name)} · allenamento del ${escapeHtml(workout.workout_date)}</p>
+      </header>
+      <div class="table">
+        ${rows.map(([value, label, color]) => `<button type="button" data-rpe="${value}" style="background:${color}">${value} - ${escapeHtml(label)}</button>`).join("")}
+      </div>
+      <div class="result" id="result">${workout.rpe ? `RPE gia registrato: ${workout.rpe}` : "Scegli un valore per inviare la risposta."}</div>
+    </section>
+  </main>
+  <script>
+    const result = document.querySelector("#result");
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-rpe]");
+      if (!button) return;
+      document.querySelectorAll("button").forEach((item) => item.disabled = true);
+      try {
+        const response = await fetch("/api/rpe/${escapeHtml(workout.rpe_token)}", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ rpe:Number(button.dataset.rpe) })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "Errore");
+        result.textContent = "Grazie, RPE " + button.dataset.rpe + " registrato.";
+      } catch (error) {
+        result.textContent = error.message || "Errore, riprova.";
+        document.querySelectorAll("button").forEach((item) => item.disabled = false);
+      }
+    });
+  </script>
+</body>
+</html>`;
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
+  })[char]);
+}
+
+function validateMutationOrigin(req) {
+  if (!isProduction || !["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) return true;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  try {
+    return new URL(origin).host === req.headers.host;
+  } catch {
+    return false;
+  }
+}
+
+async function api(req, res, url) {
+  const publicRpeMatch = url.pathname.match(/^\/api\/rpe\/([a-f0-9]{32,80})$/i);
+  if (req.method === "POST" && publicRpeMatch) {
+    const body = await readBody(req);
+    const rpe = Number(body.rpe);
+    if (!Number.isInteger(rpe) || rpe < 0 || rpe > 10) {
+      return json(res, 400, { error:"Seleziona un valore RPE valido." });
+    }
+    if (!await store.setRpeByToken(publicRpeMatch[1], rpe)) {
+      return json(res, 404, { error:"Link RPE non valido o scaduto." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/auth/status") {
+    return json(res, 200, { authenticated:isAuthenticated(req), required:Boolean(appPassword) });
+  }
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
+    if (!loginAllowed(req)) return json(res, 429, { error:"Troppi tentativi. Riprova tra alcuni minuti." });
+    const body = await readBody(req);
+    if (!appPassword || secureEqual(body.password || "", appPassword)) {
+      clearLoginAttempts(req);
+      return json(res, 200, { ok:true }, { "Set-Cookie":cookieHeader(authToken(), 60 * 60 * 24 * 30) });
+    }
+    registerFailedLogin(req);
+    return json(res, 401, { error:"Password non corretta." });
+  }
+  if (req.method === "POST" && url.pathname === "/api/auth/logout") {
+    return json(res, 200, { ok:true }, { "Set-Cookie":cookieHeader("", 0) });
+  }
+  if (!isAuthenticated(req)) return json(res, 401, { error:"Accesso richiesto." });
+
+  if (req.method === "GET" && url.pathname === "/api/dashboard") {
+    const data = await store.dashboard();
+    const totalMinutes = data.workouts.reduce((sum, item) => sum + Number(item.duration), 0);
+    const thisMonth = new Date().toISOString().slice(0, 7);
+    return json(res, 200, {
+      ...data,
+      stats:{
+        workouts:data.workouts.length, people:data.people.length, minutes:totalMinutes,
+        monthWorkouts:data.workouts.filter((item) => item.workout_date.startsWith(thisMonth)).length
+      }
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/people") {
+    const body = normalizePerson(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome." });
+    return json(res, 201, { id:await store.addPerson(body) });
+  }
+  const personMatch = url.pathname.match(/^\/api\/people\/(\d+)$/);
+  if (req.method === "PUT" && personMatch) {
+    const body = normalizePerson(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome." });
+    if (!await store.updatePerson(Number(personMatch[1]), body)) {
+      return json(res, 404, { error:"Persona non trovata." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && personMatch) {
+    if (!await store.deletePerson(Number(personMatch[1]))) {
+      return json(res, 404, { error:"Persona non trovata." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/groups") {
+    const body = normalizeGroup(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del gruppo." });
+    return json(res, 201, { id:await store.addGroup(body) });
+  }
+  const groupMatch = url.pathname.match(/^\/api\/groups\/(\d+)$/);
+  if (req.method === "PUT" && groupMatch) {
+    const body = normalizeGroup(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del gruppo." });
+    if (!await store.updateGroup(Number(groupMatch[1]), body)) {
+      return json(res, 404, { error:"Gruppo non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && groupMatch) {
+    if (!await store.deleteGroup(Number(groupMatch[1]))) {
+      return json(res, 404, { error:"Gruppo non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/employees") {
+    const body = normalizeEmployee(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del dipendente." });
+    return json(res, 201, { id:await store.addEmployee(body) });
+  }
+  const employeeMatch = url.pathname.match(/^\/api\/employees\/(\d+)$/);
+  if (req.method === "PUT" && employeeMatch) {
+    const body = normalizeEmployee(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del dipendente." });
+    if (!await store.updateEmployee(Number(employeeMatch[1]), body)) return json(res, 404, { error:"Dipendente non trovato." });
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && employeeMatch) {
+    if (!await store.deleteEmployee(Number(employeeMatch[1]))) return json(res, 404, { error:"Dipendente non trovato." });
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/templates") {
+    const body = normalizeTemplate(await readBody(req));
+    if (!body.title) return json(res, 400, { error:"Inserisci il titolo della scheda." });
+    return json(res, 201, { id:await store.addTemplate(body) });
+  }
+  const templateMatch = url.pathname.match(/^\/api\/templates\/(\d+)$/);
+  if (req.method === "PUT" && templateMatch) {
+    const body = normalizeTemplate(await readBody(req));
+    if (!body.title) return json(res, 400, { error:"Inserisci il titolo della scheda." });
+    if (!await store.updateTemplate(Number(templateMatch[1]), body)) return json(res, 404, { error:"Scheda non trovata." });
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && templateMatch) {
+    if (!await store.deleteTemplate(Number(templateMatch[1]))) return json(res, 404, { error:"Scheda non trovata." });
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/catalog") {
+    const body = await readBody(req);
+    const area = cleanText(body.bodyArea, 50);
+    const name = cleanText(body.name, 150);
+    if (!area || !name) {
+      return json(res, 400, { error:"Seleziona una zona e inserisci il nome dell'esercizio." });
+    }
+    try {
+      return json(res, 201, { id:await store.addCatalog(area, name) });
+    } catch (error) {
+      if (String(error.message).toLowerCase().includes("unique") || error.code === "23505") {
+        return json(res, 409, { error:"Questo esercizio e gia presente nella categoria." });
+      }
+      throw error;
+    }
+  }
+  const catalogMatch = url.pathname.match(/^\/api\/catalog\/(\d+)$/);
+  if (req.method === "DELETE" && catalogMatch) {
+    if (!await store.deleteCatalog(Number(catalogMatch[1]))) {
+      return json(res, 404, { error:"Esercizio non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/schedule") {
+    const body = normalizeSchedule(await readBody(req));
+    if (!body.personId || !body.date || !body.time || !body.trainer) {
+      return json(res, 400, { error:"Completa persona, data, orario e personal trainer." });
+    }
+    return json(res, 201, { id:await store.addSchedule(body) });
+  }
+  const scheduleMatch = url.pathname.match(/^\/api\/schedule\/(\d+)$/);
+  if (req.method === "PUT" && scheduleMatch) {
+    const body = normalizeSchedule(await readBody(req));
+    if (!body.personId || !body.date || !body.time || !body.trainer) {
+      return json(res, 400, { error:"Completa persona, data, orario e personal trainer." });
+    }
+    if (!await store.updateSchedule(Number(scheduleMatch[1]), body)) {
+      return json(res, 404, { error:"Appuntamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && scheduleMatch) {
+    if (!await store.deleteSchedule(Number(scheduleMatch[1]))) {
+      return json(res, 404, { error:"Appuntamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/workouts") {
+    const body = normalizeWorkout(await readBody(req));
+    if (!body.personId || !body.date || !body.exercises.length) {
+      return json(res, 400, { error:"Completa persona, data e almeno un esercizio." });
+    }
+    return json(res, 201, { id:await store.addWorkout(body) });
+  }
+  if (req.method === "PUT" && url.pathname === "/api/workout-groups") {
+    const raw = await readBody(req);
+    const ids = normalizeWorkoutIds(raw.workoutIds);
+    const body = normalizeWorkout(raw);
+    if (!ids.length || !body.personId || !body.date || !body.exercises.length) {
+      return json(res, 400, { error:"Completa persona, data e almeno un esercizio." });
+    }
+    if (!await store.updateWorkoutGroup(ids, body)) {
+      return json(res, 404, { error:"Allenamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "POST" && url.pathname === "/api/workout-groups/rpe-link") {
+    const raw = await readBody(req);
+    const ids = normalizeWorkoutIds(raw.workoutIds);
+    if (!ids.length) return json(res, 400, { error:"Sessione non trovata." });
+    const token = crypto.randomBytes(24).toString("hex");
+    const workout = await store.prepareRpeGroupLink(ids, token);
+    if (!workout) return json(res, 404, { error:"Sessione non trovata." });
+    const phone = whatsappNumber(workout.person_phone);
+    if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
+    const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature()}`;
+    return json(res, 200, {
+      ok:true,
+      url:rpeUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
+  const workoutMatch = url.pathname.match(/^\/api\/workouts\/(\d+)$/);
+  if (req.method === "POST" && workoutMatch && url.pathname.endsWith("/rpe-link")) {
+    return false;
+  }
+  const rpeLinkMatch = url.pathname.match(/^\/api\/workouts\/(\d+)\/rpe-link$/);
+  if (req.method === "POST" && rpeLinkMatch) {
+    const token = crypto.randomBytes(24).toString("hex");
+    const workout = await store.prepareRpeLink(Number(rpeLinkMatch[1]), token);
+    if (!workout) return json(res, 404, { error:"Allenamento non trovato." });
+    const phone = whatsappNumber(workout.person_phone);
+    if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
+    const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature()}`;
+    return json(res, 200, {
+      ok:true,
+      url:rpeUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
+  if (req.method === "PUT" && workoutMatch) {
+    const body = normalizeWorkout(await readBody(req));
+    if (!body.personId || !body.date || !body.exercises.length) {
+      return json(res, 400, { error:"Completa persona, data e almeno un esercizio." });
+    }
+    if (!await store.updateWorkout(Number(workoutMatch[1]), body)) {
+      return json(res, 404, { error:"Allenamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && workoutMatch) {
+    if (!await store.deleteWorkout(Number(workoutMatch[1]))) {
+      return json(res, 404, { error:"Allenamento non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  return false;
+}
+
+async function serveRpePage(res, token) {
+  const workout = await store.workoutByRpeToken(token);
+  if (!workout) {
+    res.writeHead(404, { "Content-Type":"text/plain; charset=utf-8", "Cache-Control":"no-store" });
+    return res.end("Link RPE non valido o scaduto.");
+  }
+  res.writeHead(200, {
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"same-origin",
+    "Content-Security-Policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
+  });
+  res.end(rpeHtml(workout));
+}
+
+function serveFile(res, pathname) {
+  const requested = pathname === "/" ? "index.html" : pathname.slice(1);
+  const filePath = path.resolve(publicDir, requested);
+  const relative = path.relative(publicDir, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative) || !fs.existsSync(filePath)) {
+    res.writeHead(404); return res.end("Pagina non trovata");
+  }
+  const types = {
+    ".html":"text/html", ".css":"text/css", ".js":"text/javascript",
+    ".svg":"image/svg+xml", ".png":"image/png", ".webmanifest":"application/manifest+json"
+  };
+  const cacheControl = pathname === "/sw.js" || pathname === "/" || pathname.endsWith(".html")
+    ? "no-cache"
+    : "public, max-age=3600";
+  res.writeHead(200, {
+    "Content-Type":`${types[path.extname(filePath)] || "application/octet-stream"}; charset=utf-8`,
+    "Cache-Control":cacheControl,
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"same-origin",
+    "Content-Security-Policy":"default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+  });
+  fs.createReadStream(filePath).pipe(res);
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  try {
+    if (url.pathname === "/health") {
+      if (!ready || shuttingDown) return json(res, 503, { ok:false, database:store.type });
+      try {
+        await Promise.race([
+          store.ping(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Database timeout")), 3_000))
+        ]);
+        return json(res, 200, { ok:true, database:store.type });
+      } catch {
+        return json(res, 503, { ok:false, database:store.type });
+      }
+    }
+    const rpePageMatch = url.pathname.match(/^\/rpe\/([a-f0-9]{32,80})$/i);
+    if (rpePageMatch) {
+      if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
+      return serveRpePage(res, rpePageMatch[1]);
+    }
+    if (url.pathname.startsWith("/api/")) {
+      if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
+      if (!validateMutationOrigin(req)) return json(res, 403, { error:"Origine della richiesta non valida." });
+      const handled = await api(req, res, url);
+      if (handled === false) json(res, 404, { error:"Risorsa non trovata." });
+    } else {
+      serveFile(res, url.pathname);
+    }
+  } catch (error) {
+    console.error(error);
+    json(res, error.status || 500, {
+      error:error.status && error.status < 500 ? error.message : "Si e verificato un errore."
+    });
+  }
+});
+
+async function initializeStore() {
+  let lastError;
+  for (let attempt = 1; attempt <= 8; attempt += 1) {
+    try {
+      await store.init();
+      await store.ping();
+      return;
+    } catch (error) {
+      lastError = error;
+      const delay = Math.min(500 * (2 ** (attempt - 1)), 5_000);
+      console.error(`Database non pronto (tentativo ${attempt}/8): ${error.message}`);
+      if (attempt < 8) await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+
+server.listen(PORT, HOST, () => {
+  console.log(`\nFitTrack in avvio su http://localhost:${PORT}`);
+  if (!isProduction) {
+    for (const addresses of Object.values(os.networkInterfaces())) {
+      for (const address of addresses || []) {
+        if (address.family === "IPv4" && !address.internal) console.log(`Da smartphone: http://${address.address}:${PORT}`);
+      }
+    }
+  }
+});
+
+initializeStore().then(() => {
+  if (shuttingDown) return;
+  ready = true;
+  console.log(`FitTrack (${store.type}) e pronto.`);
+  if (!isProduction) console.log("Premi Ctrl+C per chiudere.\n");
+}).catch((error) => {
+  console.error("Avvio non riuscito:", error);
+  shuttingDown = true;
+  server.close(() => process.exit(1));
+});
+
+server.requestTimeout = 30_000;
+server.headersTimeout = 35_000;
+server.keepAliveTimeout = 5_000;
+server.maxRequestsPerSocket = 1_000;
+
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  ready = false;
+  console.log(`${signal}: arresto ordinato in corso...`);
+  const forceExit = setTimeout(() => process.exit(1), 10_000);
+  forceExit.unref();
+  if (!server.listening) {
+    try {
+      await store.close();
+      process.exit(0);
+    } catch {
+      process.exit(1);
+    }
+    return;
+  }
+  server.close(async () => {
+    try {
+      await store.close();
+      process.exit(0);
+    } catch (error) {
+      console.error("Errore durante la chiusura:", error);
+      process.exit(1);
+    }
+  });
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

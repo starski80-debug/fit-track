@@ -160,6 +160,11 @@ h2 { margin-bottom:0; }
   color:var(--ink);
   text-align:left;
 }
+.calendar-day.has-items {
+  background:var(--day-fill,#ffcc05);
+  color:#111827;
+  border-color:transparent;
+}
 .calendar-day.active,
 .calendar-day:hover {
   border-color:#ffcc05;
@@ -168,8 +173,19 @@ h2 { margin-bottom:0; }
 .calendar-day.muted { background:transparent; border-color:transparent; }
 .calendar-day strong { font-size:18px; }
 .calendar-day span { min-height:15px; color:var(--muted); font-size:11px; font-weight:800; }
+.calendar-day.has-items span { color:#111827; }
 .calendar-colors { display:flex; flex-wrap:wrap; gap:4px; }
-.calendar-colors i { width:13px; height:13px; border-radius:4px; }
+.calendar-colors i { display:none; }
+.day-dialog-content {
+  width:min(760px,92vw);
+  padding:22px;
+}
+.day-dialog-list {
+  display:grid;
+  grid-template-columns:1fr;
+  max-height:62vh;
+  overflow:auto;
+}
 .schedule-item {
   border-left:6px solid var(--trainer-color,#ffcc05);
 }
@@ -208,6 +224,19 @@ h2 { margin-bottom:0; }
   grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
   gap:14px;
 }
+.group-workout-mini {
+  display:grid;
+  gap:5px;
+  margin:11px 0;
+}
+.group-workout-mini span {
+  padding:6px 8px;
+  border-radius:8px;
+  background:var(--surface-soft);
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+}
 .compact-head { margin:0 0 14px; }
 .template-form {
   display:grid;
@@ -217,6 +246,18 @@ h2 { margin-bottom:0; }
   border-radius:20px;
   background:var(--surface);
   margin-bottom:18px;
+}
+.template-form:before {
+  content:"FORMAE PROGRAMMAZIONE";
+  display:block;
+  margin:-16px -16px 4px;
+  padding:18px;
+  background:#ffcc05;
+  color:#111827;
+  text-align:center;
+  font-size:26px;
+  font-weight:950;
+  letter-spacing:.04em;
 }
 .template-form > label {
   margin:0;
@@ -266,7 +307,7 @@ h2 { margin-bottom:0; }
 .template-table { overflow:auto; }
 .template-table-row {
   display:grid;
-  grid-template-columns:1.3fr .55fr .75fr .75fr 1.6fr 1fr;
+  grid-template-columns:.55fr 1.25fr .55fr .75fr .75fr 1.7fr 1fr;
   min-width:820px;
 }
 .template-table-row span {
@@ -275,11 +316,18 @@ h2 { margin-bottom:0; }
   border-bottom:1px solid #222;
   font-size:13px;
   font-weight:800;
+  min-height:44px;
 }
 .template-table-head span {
   background:#222;
   color:#ffcc05;
   text-transform:uppercase;
+}
+.template-table-row:nth-child(odd):not(.template-table-head) span {
+  background:#d8d8d8;
+}
+.template-table-row:nth-child(even):not(.template-table-head) span {
+  background:#fff;
 }
 .group-card {
   display:grid;

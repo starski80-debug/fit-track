@@ -1,4 +1,4 @@
-const state = {
+﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
   scheduleDate:new Date().toISOString().slice(0, 10), workoutPersonId:null, groupDetailId:null
 };
@@ -161,7 +161,7 @@ function workoutCard(workout) {
   return `<article class="workout-card">
     <button type="button" class="avatar avatar-button" data-open-person-history="${workout.person_id}" style="background:${escapeHtml(workout.person_color)}" aria-label="Apri allenamenti di ${escapeHtml(workout.person_name)}">${escapeHtml(workout.person_name[0])}</button>
     <div class="workout-main">
-      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> · ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
+      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> Â· ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
       <div class="workout-meta">
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
@@ -169,7 +169,7 @@ function workoutCard(workout) {
         ${workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "" ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
       </div>
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
-        `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} · ${escapeHtml(item.name)}</span>`
+        `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} Â· ${escapeHtml(item.name)}</span>`
       ).join("")}</div>
     </div>
     <div class="workout-side">
@@ -209,7 +209,7 @@ function scheduleStatusSummary(items) {
     counts.confirmed ? `${counts.confirmed} conf.` : "",
     counts.scheduled ? `${counts.scheduled} att.` : "",
     counts.cancelled ? `${counts.cancelled} ann.` : ""
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" Â· ");
 }
 
 function trainerColor(name = "") {
@@ -225,7 +225,7 @@ function scheduleCard(item) {
     <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
     <div class="schedule-body">
       <h3>${escapeHtml(item.person_name)} <span class="schedule-status">${escapeHtml(scheduleStatusLabel(status))}</span></h3>
-      <p>${formatDate(item.scheduled_date)} · PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
+      <p>${formatDate(item.scheduled_date)} Â· PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
       ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
     </div>
     <div class="schedule-item-actions">
@@ -525,22 +525,33 @@ function addTemplateRow(defaults = {}) {
 
 function renderTemplates() {
   const templates = state.data.templates || [];
+  const weekHeaders = ["1Â° week", "2Â° week", "3Â° week", "4Â° week", "5Â° week", "6Â° week", "7Â° week"];
   $("#templates-list").innerHTML = templates.map((template) => {
     const person = state.data.people.find((item) => item.id === Number(template.person_id));
     return `<article class="template-card">
       <div class="template-card-head">
-        <div><p class="eyebrow">FORMAE PROGRAMMAZIONE</p><h3>${escapeHtml(template.title)}</h3><span>${person ? escapeHtml(person.name) : "Scheda generale"}</span></div>
+        <div class="template-brand"><h3>FORMAE</h3><p>PROGRAMMAZIONE</p></div>
         <div>
           <button type="button" class="secondary whatsapp-button" data-template-whatsapp="${template.id}">WhatsApp</button>
           <button type="button" class="secondary" data-edit-template="${template.id}">Modifica</button>
           <button type="button" class="small-danger" data-delete-template="${template.id}">Elimina</button>
         </div>
       </div>
+      <div class="template-meta"><span>Scheda: ${escapeHtml(template.title)}</span><span>${person ? `Cliente: ${escapeHtml(person.name)}` : "Scheda generale"}</span>${template.notes ? `<span>Note: ${escapeHtml(template.notes)}</span>` : ""}</div>
       <div class="template-table">
-        <div class="template-table-row template-table-head"><span>Blocco</span><span>Allenamento</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span><span>Week</span></div>
-        ${(template.rows || []).map((row) => `<div class="template-table-row">
-          <span>${escapeHtml(row.block)}</span><span>${escapeHtml(row.exercise)}</span><span>${escapeHtml(row.sets)}</span><span>${escapeHtml(row.reps)}</span><span>${escapeHtml(row.rest)}</span><span>${escapeHtml(row.notes)}</span><span>${escapeHtml(row.weeks)}</span>
-        </div>`).join("")}
+        <div class="template-table-row template-table-head"><span></span><span>Allenamento A</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span>${weekHeaders.map((week) => `<span>${week}</span>`).join("")}</div>
+        ${(template.rows || []).map((row, index) => {
+          const weeks = String(row.weeks || "").split(/[,;|]/);
+          return `<div class="template-table-row">
+            <span>${escapeHtml(row.block || String(index + 1))}</span>
+            <span>${escapeHtml(row.exercise)}</span>
+            <span>${escapeHtml(row.sets)}</span>
+            <span>${escapeHtml(row.reps)}</span>
+            <span>${escapeHtml(row.rest)}</span>
+            <span>${escapeHtml(row.notes)}</span>
+            ${weekHeaders.map((_, weekIndex) => `<span>${escapeHtml(weeks[weekIndex] || "")}</span>`).join("")}
+          </div>`;
+        }).join("")}
       </div>
     </article>`;
   }).join("") || `<div class="empty">Nessuna scheda creata.</div>`;
@@ -599,7 +610,7 @@ function renderHistory() {
       const days = new Set(workouts.map((workout) => workout.workout_date)).size;
       return `<button class="history-person" data-history-person="${item.id}">
         <div class="avatar" style="background:${escapeHtml(item.color)}">${escapeHtml(item.name[0])}</div>
-        <div><h3>${escapeHtml(item.name)}</h3><p>${days} ${days === 1 ? "giorno" : "giorni"} · ${workouts.length} ${workouts.length === 1 ? "sessione" : "sessioni"}</p></div>
+        <div><h3>${escapeHtml(item.name)}</h3><p>${days} ${days === 1 ? "giorno" : "giorni"} Â· ${workouts.length} ${workouts.length === 1 ? "sessione" : "sessioni"}</p></div>
       </button>`;
     }).join("") || `<div class="empty">Nessuna persona inserita.</div>`;
     return;
@@ -694,7 +705,7 @@ function dayCard(day) {
         <strong>${escapeHtml(exercise.name)} <small class="tag area-tag" data-area="${escapeHtml(exercise.body_area)}">${escapeHtml(exercise.body_area)}</small></strong>
         <span>${exercise.sets} serie</span>
         <span>${exercise.reps} rip.</span>
-        <span>${formatNumber(exercise.weight)} kg · ${Number(exercise.seconds || 0)} sec</span>
+        <span>${formatNumber(exercise.weight)} kg Â· ${Number(exercise.seconds || 0)} sec</span>
         <span class="exercise-volume">${formatNumber(exerciseUnits(exercise))}</span>
       </div>`).join("")}
     </div>`;
@@ -717,7 +728,7 @@ function dayCard(day) {
       <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso / sec</span><span>Unita</span></div>
       ${exerciseRows}
     </div>
-    ${day.notes.length ? `<div class="day-notes">${day.notes.map(escapeHtml).join(" · ")}</div>` : ""}
+    ${day.notes.length ? `<div class="day-notes">${day.notes.map(escapeHtml).join(" Â· ")}</div>` : ""}
   </article>`;
 }
 
@@ -1591,8 +1602,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v43")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v43", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v44")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v44", "1");
     window.location.reload();
   });
 }
@@ -1608,3 +1619,4 @@ async function initialize() {
   }
 }
 initialize();
+

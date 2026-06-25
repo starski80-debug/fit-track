@@ -322,8 +322,8 @@ h2 { margin-bottom:0; }
 .template-table { overflow:auto; }
 .template-table-row {
   display:grid;
-  grid-template-columns:.55fr 1.25fr .55fr .75fr .75fr 1.7fr 1fr;
-  min-width:820px;
+  grid-template-columns:.35fr 1.8fr .48fr .65fr .65fr 2fr repeat(7,.32fr);
+  min-width:980px;
 }
 .template-table-row span {
   padding:10px;

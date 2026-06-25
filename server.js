@@ -348,7 +348,7 @@ function templateSheetHtml(template) {
     .brand h1 { margin:0; font-size:36px; line-height:1; letter-spacing:.03em; }
     .brand h2 { margin:8px 0 0; font-size:19px; }
     .meta { display:flex; flex-wrap:wrap; gap:10px 24px; padding:10px 14px; border-bottom:2px solid var(--grid); font-weight:800; }
-    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:1050px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:900px; }
     th { background:var(--dark); color:var(--yellow); border:2px solid var(--grid); padding:12px 8px; font-size:15px; text-transform:uppercase; }
     td { border:2px solid var(--grid); padding:10px 8px; min-height:42px; font-size:14px; font-weight:800; text-align:center; vertical-align:middle; }
     td.exercise { text-align:center; font-size:15px; }
@@ -359,7 +359,7 @@ function templateSheetHtml(template) {
     .exercise { width:210px; }
     .sets,.reps,.rest { width:95px; }
     .notes { width:260px; }
-    .week { width:78px; }
+    .week { width:46px; }
     .empty { padding:24px; text-align:center; font-weight:800; }
     @media (max-width:720px) {
       .wrap { padding:10px; }
@@ -382,12 +382,12 @@ function templateSheetHtml(template) {
       td.exercise { font-size:6.2px; }
       td.notes { font-size:5.4px; line-height:1.08; }
       .block { width:3.5%; font-size:6.2px; }
-      .exercise { width:15%; }
+      .exercise { width:20%; }
       .sets { width:5.6%; }
       .reps { width:7%; }
       .rest { width:7%; }
-      .notes { width:18%; }
-      .week { width:6.27%; }
+      .notes { width:22%; }
+      .week { width:3.7%; }
       @page { size:A4 portrait; margin:8mm; }
     }
   </style>

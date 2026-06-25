@@ -227,6 +227,8 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(html, /Schede di allenamento/);
   assert.match(app, /function renderEmployees/);
   assert.match(app, /function renderTemplates/);
+  assert.match(app, /template-brand/);
+  assert.match(app, /template-meta/);
   assert.match(app, /function templateWhatsappUrl/);
   assert.match(app, /data-template-whatsapp/);
   assert.match(app, /\/api\/templates\/\$\{templateWhatsappButton\.dataset\.templateWhatsapp\}\/share-link/);
@@ -248,6 +250,7 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(database, /async prepareTemplateShareLink/);
   assert.match(database, /async templateByShareToken/);
   assert.match(css, /template-table/);
+  assert.match(css, /repeat\(7,\.32fr\)/);
 });
 
 test("il nuovo design include tema scuro e colori per zone", () => {
@@ -385,7 +388,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v33/);
+  assert.match(worker, /fittrack-shell-v34/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

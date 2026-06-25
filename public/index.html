@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=42">
+  <link rel="stylesheet" href="/style.css?v=43">
 </head>
 <body>
   <aside class="sidebar">
@@ -58,7 +58,7 @@
           <h2>Ogni allenamento<br>conta.</h2>
           <p>Registra i progressi di tutti, un esercizio alla volta.</p>
         </div>
-        <div class="hero-graphic"><div class="pulse">â†—</div></div>
+        <div class="hero-graphic"><div class="pulse">↗</div></div>
       </div>
       <div class="stats" id="stats"></div>
       <section class="home-tabs" aria-label="Azioni principali">
@@ -181,7 +181,7 @@
     <section id="history-view" class="view hidden">
       <div class="section-head">
         <div><p class="eyebrow">DIARIO</p><h2 id="history-title">Scegli una persona</h2></div>
-        <button class="secondary hidden" id="history-back">â† Tutte le persone</button>
+        <button class="secondary hidden" id="history-back">← Tutte le persone</button>
       </div>
       <p class="section-help" id="history-help">Clicca su un nome per vedere allenamenti, giornate e andamento.</p>
       <div id="history-people" class="history-people"></div>
@@ -254,7 +254,7 @@
     <form id="workout-form">
       <input name="id" type="hidden">
       <input name="groupIds" type="hidden">
-      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">Ã—</button></div>
+      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">×</button></div>
       <div class="form-grid">
         <label>Persona<select name="personId" id="person-select" required></select></label>
         <label>Data<input name="date" type="date" required></label>
@@ -314,7 +314,7 @@
   <dialog id="person-dialog">
     <form id="person-form">
       <input name="id" type="hidden">
-      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">Ã—</button></div>
+      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">×</button></div>
       <label>Nome<input name="name" placeholder="Es. Luca" required autofocus></label>
       <div class="form-grid">
         <label>Data di nascita<input name="birthDate" type="date"></label>
@@ -334,7 +334,7 @@
 
   <dialog id="catalog-dialog">
     <form id="catalog-form">
-      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">Ã—</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">×</button></div>
       <label>Zona del corpo
         <select name="bodyArea" required>
           <option>Petto</option><option>Dorso</option><option>Spalle</option>
@@ -365,7 +365,7 @@
     <div class="install-content">
       <div class="modal-head">
         <div><p class="eyebrow">APP SUL TELEFONO</p><h2>Installa FitTrack</h2></div>
-        <button type="button" class="close">Ã—</button>
+        <button type="button" class="close">×</button>
       </div>
       <div class="install-icon"><img src="/icons/icon-192.png" alt=""></div>
       <div id="ios-install-help">
@@ -377,14 +377,14 @@
           <li>Conferma con <strong>Aggiungi</strong>.</li>
         </ol>
       </div>
-      <p class="install-note">Lâ€™app userÃ  sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+      <p class="install-note">L’app userà sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
     </div>
   </dialog>
 
   <dialog id="area-dialog">
     <form id="area-form">
       <input name="oldName" type="hidden">
-      <div class="modal-head"><div><p class="eyebrow">MACRO AREA</p><h2>Modifica nome scheda</h2></div><button type="button" class="close">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">MACRO AREA</p><h2>Modifica nome scheda</h2></div><button type="button" class="close">�</button></div>
       <label>Nuovo nome<input name="name" placeholder="Es. Mobilita" required></label>
       <button class="primary full" type="submit">Salva nome</button>
     </form>
@@ -394,7 +394,7 @@
     <div class="day-dialog-content">
       <div class="modal-head">
         <div><p class="eyebrow">DETTAGLIO GIORNO</p><h2 id="day-dialog-title">Calendario</h2></div>
-        <button type="button" class="close">Ã—</button>
+        <button type="button" class="close">×</button>
       </div>
       <div id="day-dialog-list" class="schedule-list day-dialog-list"></div>
     </div>
@@ -425,7 +425,7 @@
         <option value="90">90 sec</option><option value="120">120 sec</option><option value="180">180 sec</option>
         <option value="240">240 sec</option><option value="300">300 sec</option>
       </select>
-      <button type="button" class="remove-exercise" aria-label="Rimuovi">Ã—</button>
+      <button type="button" class="remove-exercise" aria-label="Rimuovi">×</button>
     </div>
   </template>
   <template id="template-row-template">
@@ -437,11 +437,11 @@
       <input class="template-rest" placeholder="Recupero" aria-label="Recupero">
       <input class="template-notes" placeholder="Note" aria-label="Note">
       <input class="template-weeks" placeholder="1-7 week" aria-label="Settimane">
-      <button type="button" class="remove-template-row" aria-label="Rimuovi">Ã—</button>
+      <button type="button" class="remove-template-row" aria-label="Rimuovi">×</button>
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=42"></script>
+  <script src="/app.js?v=43"></script>
 </body>
 </html>
 

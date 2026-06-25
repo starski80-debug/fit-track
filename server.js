@@ -368,27 +368,27 @@ function templateSheetHtml(template) {
       button { width:100%; }
     }
     @media print {
-      html,body { width:297mm; margin:0; background:#fff; }
-      .wrap { width:281mm; max-width:none; margin:0 auto; padding:0; }
+      html,body { width:auto; margin:0; background:#fff; }
+      .wrap { width:190mm; max-width:190mm; margin:0 auto; padding:0; }
       .toolbar { display:none; }
       .sheet { width:100%; box-shadow:none; border:2px solid var(--grid); overflow:visible; break-inside:avoid; page-break-inside:avoid; }
       .brand { padding:8px 8px 12px; }
-      .brand h1 { font-size:24px; }
-      .brand h2 { margin-top:5px; font-size:13px; }
-      .meta { padding:6px 8px; gap:6px 14px; font-size:9px; }
+      .brand h1 { font-size:21px; }
+      .brand h2 { margin-top:5px; font-size:11px; }
+      .meta { padding:5px 6px; gap:5px 10px; font-size:7.4px; }
       table { width:100%; min-width:0; table-layout:fixed; }
-      th { padding:5px 3px; font-size:8px; line-height:1.05; }
-      td { padding:5px 3px; min-height:0; font-size:8px; line-height:1.12; overflow-wrap:anywhere; word-break:break-word; }
-      td.exercise { font-size:8.5px; }
-      td.notes { font-size:7.5px; line-height:1.12; }
-      .block { width:4%; font-size:9px; }
-      .exercise { width:16%; }
-      .sets { width:6%; }
-      .reps { width:8%; }
-      .rest { width:8%; }
-      .notes { width:19%; }
-      .week { width:5.55%; }
-      @page { size:A4 landscape; margin:8mm; }
+      th { padding:3px 1.5px; font-size:5.8px; line-height:1.05; border-width:1px; }
+      td { padding:3px 1.5px; min-height:0; font-size:5.8px; line-height:1.08; overflow-wrap:anywhere; word-break:break-word; border-width:1px; }
+      td.exercise { font-size:6.2px; }
+      td.notes { font-size:5.4px; line-height:1.08; }
+      .block { width:3.5%; font-size:6.2px; }
+      .exercise { width:15%; }
+      .sets { width:5.6%; }
+      .reps { width:7%; }
+      .rest { width:7%; }
+      .notes { width:18%; }
+      .week { width:6.27%; }
+      @page { size:A4 portrait; margin:8mm; }
     }
   </style>
 </head>

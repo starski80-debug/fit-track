@@ -327,6 +327,95 @@ function appointmentHtml(item) {
 </html>`;
 }
 
+function templateSheetHtml(template) {
+  const rows = template.rows?.length ? template.rows : [];
+  const weekHeaders = ["1° week", "2° week", "3° week", "4° week", "5° week", "6° week", "7° week"];
+  return `<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Formae - Scheda allenamento</title>
+  <style>
+    :root { color-scheme:light; font-family:Arial,Helvetica,sans-serif; --yellow:#ffcc05; --dark:#202020; --grid:#111; }
+    body { margin:0; background:#d9e1ed; color:#050505; }
+    .wrap { max-width:1280px; margin:0 auto; padding:20px; }
+    .toolbar { display:flex; justify-content:flex-end; gap:10px; margin:0 0 12px; }
+    button { border:0; border-radius:12px; padding:12px 16px; background:#111827; color:#fff; font-weight:800; cursor:pointer; }
+    .sheet { background:#fff; border:2px solid var(--grid); box-shadow:0 18px 45px rgba(8,23,53,.18); overflow:auto; }
+    .brand { background:var(--yellow); text-align:center; padding:15px 12px 22px; border-bottom:2px solid var(--grid); }
+    .brand h1 { margin:0; font-size:36px; line-height:1; letter-spacing:.03em; }
+    .brand h2 { margin:8px 0 0; font-size:19px; }
+    .meta { display:flex; flex-wrap:wrap; gap:10px 24px; padding:10px 14px; border-bottom:2px solid var(--grid); font-weight:800; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; min-width:1050px; }
+    th { background:var(--dark); color:var(--yellow); border:2px solid var(--grid); padding:12px 8px; font-size:15px; text-transform:uppercase; }
+    td { border:2px solid var(--grid); padding:10px 8px; min-height:42px; font-size:14px; font-weight:800; text-align:center; vertical-align:middle; }
+    td.exercise { text-align:center; font-size:15px; }
+    td.notes { text-align:center; font-size:13px; line-height:1.25; }
+    tbody tr:nth-child(odd) td { background:#d9d9d9; }
+    tbody tr:nth-child(even) td { background:#fff; }
+    .block { width:44px; font-size:18px; }
+    .exercise { width:210px; }
+    .sets,.reps,.rest { width:95px; }
+    .notes { width:260px; }
+    .week { width:78px; }
+    .empty { padding:24px; text-align:center; font-weight:800; }
+    @media (max-width:720px) {
+      .wrap { padding:10px; }
+      .brand h1 { font-size:30px; }
+      .toolbar { justify-content:stretch; }
+      button { width:100%; }
+    }
+    @media print {
+      body { background:#fff; }
+      .wrap { max-width:none; padding:0; }
+      .toolbar { display:none; }
+      .sheet { box-shadow:none; border:0; overflow:visible; }
+      table { min-width:0; }
+      @page { size:landscape; margin:8mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="toolbar"><button type="button" onclick="window.print()">Stampa / salva PDF</button></div>
+    <section class="sheet">
+      <header class="brand"><h1>FORMAE</h1><h2>PROGRAMMAZIONE</h2></header>
+      <div class="meta">
+        <span>Scheda: ${escapeHtml(template.title)}</span>
+        ${template.person_name ? `<span>Cliente: ${escapeHtml(template.person_name)}</span>` : ""}
+        ${template.notes ? `<span>Note: ${escapeHtml(template.notes)}</span>` : ""}
+      </div>
+      ${rows.length ? `<table>
+        <thead>
+          <tr>
+            <th class="block"></th>
+            <th class="exercise">Allenamento A</th>
+            <th class="sets">Serie</th>
+            <th class="reps">Ripetizioni</th>
+            <th class="rest">Recupero</th>
+            <th class="notes">Note</th>
+            ${weekHeaders.map((week) => `<th class="week">${week}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row, index) => `<tr>
+            <td class="block">${escapeHtml(row.block || String(index + 1))}</td>
+            <td class="exercise">${escapeHtml(row.exercise)}</td>
+            <td class="sets">${escapeHtml(row.sets)}</td>
+            <td class="reps">${escapeHtml(row.reps)}</td>
+            <td class="rest">${escapeHtml(row.rest)}</td>
+            <td class="notes">${escapeHtml(row.notes)}</td>
+            ${weekHeaders.map((_, weekIndex) => `<td class="week">${escapeHtml(String(row.weeks || "").split(/[,;|]/)[weekIndex] || "")}</td>`).join("")}
+          </tr>`).join("")}
+        </tbody>
+      </table>` : `<div class="empty">Scheda senza esercizi.</div>`}
+    </section>
+  </div>
+</body>
+</html>`;
+}
+
 function rpeHtml(workout) {
   const rows = [
     [10, "Maximum Effort", "#df0900"],
@@ -540,6 +629,21 @@ async function api(req, res, url) {
     return json(res, 201, { id:await store.addTemplate(body) });
   }
   const templateMatch = url.pathname.match(/^\/api\/templates\/(\d+)$/);
+  const templateShareMatch = url.pathname.match(/^\/api\/templates\/(\d+)\/share-link$/);
+  if (req.method === "POST" && templateShareMatch) {
+    const token = crypto.randomBytes(24).toString("hex");
+    const template = await store.prepareTemplateShareLink(Number(templateShareMatch[1]), token);
+    if (!template) return json(res, 404, { error:"Scheda non trovata." });
+    const phone = whatsappNumber(template.person_phone);
+    if (!phone) return json(res, 400, { error:"Associa la scheda a una persona con telefono WhatsApp." });
+    const sheetUrl = `${publicBaseUrl(req)}/template/${template.share_token || token}`;
+    const message = `Ciao ${template.person_name}, ecco la tua scheda di allenamento Formae: ${sheetUrl}${formaeWhatsappSignature()}`;
+    return json(res, 200, {
+      ok:true,
+      url:sheetUrl,
+      whatsappUrl:`https://wa.me/${phone}?text=${encodeURIComponent(message)}`
+    });
+  }
   if (req.method === "PUT" && templateMatch) {
     const body = normalizeTemplate(await readBody(req));
     if (!body.title) return json(res, 400, { error:"Inserisci il titolo della scheda." });
@@ -731,6 +835,22 @@ async function serveAppointmentPage(res, token) {
   res.end(appointmentHtml(item));
 }
 
+async function serveTemplateSheet(res, token) {
+  const template = await store.templateByShareToken(token);
+  if (!template) {
+    res.writeHead(404, { "Content-Type":"text/plain; charset=utf-8", "Cache-Control":"no-store" });
+    return res.end("Scheda non valida o non disponibile.");
+  }
+  res.writeHead(200, {
+    "Content-Type":"text/html; charset=utf-8",
+    "Cache-Control":"no-store",
+    "X-Content-Type-Options":"nosniff",
+    "Referrer-Policy":"same-origin",
+    "Content-Security-Policy":"default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"
+  });
+  res.end(templateSheetHtml(template));
+}
+
 function serveFile(res, pathname) {
   const requested = pathname === "/" ? "index.html" : pathname.slice(1);
   const filePath = path.resolve(publicDir, requested);
@@ -774,6 +894,11 @@ const server = http.createServer(async (req, res) => {
     if (appointmentPageMatch) {
       if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
       return serveAppointmentPage(res, appointmentPageMatch[1]);
+    }
+    const templatePageMatch = url.pathname.match(/^\/template\/([a-f0-9]{32,80})$/i);
+    if (templatePageMatch) {
+      if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });
+      return serveTemplateSheet(res, templatePageMatch[1]);
     }
     const rpePageMatch = url.pathname.match(/^\/rpe\/([a-f0-9]{32,80})$/i);
     if (rpePageMatch) {

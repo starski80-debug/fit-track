@@ -229,12 +229,20 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(app, /function renderTemplates/);
   assert.match(app, /function templateWhatsappUrl/);
   assert.match(app, /data-template-whatsapp/);
+  assert.match(app, /\/api\/templates\/\$\{templateWhatsappButton\.dataset\.templateWhatsapp\}\/share-link/);
   assert.match(app, /employeeOptionHtml/);
   assert.match(server, /function normalizeEmployee/);
   assert.match(server, /function normalizeTemplate/);
+  assert.match(server, /function templateSheetHtml/);
+  assert.match(server, /share-link/);
+  assert.match(server, /serveTemplateSheet/);
+  assert.match(server, /\/template\//);
   assert.match(database, /CREATE TABLE IF NOT EXISTS employees/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS training_templates/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS template_rows/);
+  assert.match(database, /share_token TEXT NOT NULL DEFAULT ''/);
+  assert.match(database, /async prepareTemplateShareLink/);
+  assert.match(database, /async templateByShareToken/);
   assert.match(css, /template-table/);
 });
 
@@ -373,8 +381,9 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v30/);
+  assert.match(worker, /fittrack-shell-v31/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);
   assert.match(worker, /brand\/formae-mark\.png/);
 });

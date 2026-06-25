@@ -1104,12 +1104,12 @@ document.addEventListener("click", async (event) => {
   }
   const templateWhatsappButton = event.target.closest("[data-template-whatsapp]");
   if (templateWhatsappButton) {
-    const template = (state.data.templates || []).find((item) => item.id === Number(templateWhatsappButton.dataset.templateWhatsapp));
-    if (template) {
-      const url = templateWhatsappUrl(template);
-      if (!url) return toast("Associa la scheda a una persona con telefono WhatsApp.");
-      window.open(url, "_blank", "noopener");
-      toast("WhatsApp aperto con la scheda.");
+    try {
+      const data = await request(`/api/templates/${templateWhatsappButton.dataset.templateWhatsapp}/share-link`, { method:"POST" });
+      window.open(data.whatsappUrl, "_blank", "noopener");
+      toast("WhatsApp aperto con il link alla scheda.");
+    } catch (error) {
+      toast(error.message);
     }
   }
   const deleteTemplateButton = event.target.closest("[data-delete-template]");
@@ -1591,8 +1591,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v40")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v40", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v41")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v41", "1");
     window.location.reload();
   });
 }

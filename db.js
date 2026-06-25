@@ -46,6 +46,7 @@ function createSqliteStore() {
       title TEXT NOT NULL,
       person_id INTEGER NOT NULL DEFAULT 0,
       notes TEXT NOT NULL DEFAULT '',
+      share_token TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS template_rows (
@@ -128,6 +129,12 @@ function createSqliteStore() {
     ["response_token", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!scheduleColumns.includes(name)) db.exec(`ALTER TABLE scheduled_sessions ADD COLUMN ${name} ${definition}`);
+  }
+  const templateColumns = db.prepare("PRAGMA table_info(training_templates)").all().map((item) => item.name);
+  for (const [name, definition] of [
+    ["share_token", "TEXT NOT NULL DEFAULT ''"]
+  ]) {
+    if (!templateColumns.includes(name)) db.exec(`ALTER TABLE training_templates ADD COLUMN ${name} ${definition}`);
   }
 
   return {
@@ -214,6 +221,27 @@ function createSqliteStore() {
       } catch (error) { db.exec("ROLLBACK"); throw error; }
     },
     async deleteTemplate(id) { return db.prepare("DELETE FROM training_templates WHERE id=?").run(id).changes > 0; },
+    async prepareTemplateShareLink(id, token) {
+      db.prepare("UPDATE training_templates SET share_token=CASE WHEN share_token = '' THEN ? ELSE share_token END WHERE id=?").run(token, id);
+      const template = db.prepare(`
+        SELECT t.*, p.name AS person_name, p.phone AS person_phone
+        FROM training_templates t LEFT JOIN people p ON p.id = t.person_id
+        WHERE t.id=?
+      `).get(id);
+      if (!template) return null;
+      const rows = db.prepare("SELECT * FROM template_rows WHERE template_id=? ORDER BY position, id").all(id);
+      return { ...template, rows };
+    },
+    async templateByShareToken(token) {
+      const template = db.prepare(`
+        SELECT t.*, p.name AS person_name
+        FROM training_templates t LEFT JOIN people p ON p.id = t.person_id
+        WHERE t.share_token=?
+      `).get(token);
+      if (!template) return null;
+      const rows = db.prepare("SELECT * FROM template_rows WHERE template_id=? ORDER BY position, id").all(template.id);
+      return { ...template, rows };
+    },
     async addCatalog(area, name) {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
@@ -423,6 +451,7 @@ function createPostgresStore() {
           title TEXT NOT NULL,
           person_id BIGINT NOT NULL DEFAULT 0,
           notes TEXT NOT NULL DEFAULT '',
+          share_token TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
         CREATE TABLE IF NOT EXISTS template_rows (
@@ -477,6 +506,7 @@ function createPostgresStore() {
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS seconds INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE exercises ADD COLUMN IF NOT EXISTS phase TEXT NOT NULL DEFAULT 'main';
         ALTER TABLE scheduled_sessions ADD COLUMN IF NOT EXISTS response_token TEXT NOT NULL DEFAULT '';
+        ALTER TABLE training_templates ADD COLUMN IF NOT EXISTS share_token TEXT NOT NULL DEFAULT '';
         DO $$
         BEGIN
           IF EXISTS (
@@ -619,6 +649,37 @@ function createPostgresStore() {
     async deleteTemplate(id) {
       const result = await query("DELETE FROM training_templates WHERE id=$1", [id]);
       return result.rowCount > 0;
+    },
+    async prepareTemplateShareLink(id, token) {
+      await query("UPDATE training_templates SET share_token=CASE WHEN share_token = '' THEN $1 ELSE share_token END WHERE id=$2", [token, id]);
+      const template = await query(`
+        SELECT t.*, p.name AS person_name, p.phone AS person_phone
+        FROM training_templates t LEFT JOIN people p ON p.id=t.person_id
+        WHERE t.id=$1
+      `, [id]);
+      if (!template.rows[0]) return null;
+      const rows = await query("SELECT * FROM template_rows WHERE template_id=$1 ORDER BY position, id", [id]);
+      return {
+        ...template.rows[0],
+        id:Number(template.rows[0].id),
+        person_id:Number(template.rows[0].person_id || 0),
+        rows:rows.rows.map((row) => ({ ...row, id:Number(row.id), template_id:Number(row.template_id) }))
+      };
+    },
+    async templateByShareToken(token) {
+      const template = await query(`
+        SELECT t.*, p.name AS person_name
+        FROM training_templates t LEFT JOIN people p ON p.id=t.person_id
+        WHERE t.share_token=$1
+      `, [token]);
+      if (!template.rows[0]) return null;
+      const rows = await query("SELECT * FROM template_rows WHERE template_id=$1 ORDER BY position, id", [template.rows[0].id]);
+      return {
+        ...template.rows[0],
+        id:Number(template.rows[0].id),
+        person_id:Number(template.rows[0].person_id || 0),
+        rows:rows.rows.map((row) => ({ ...row, id:Number(row.id), template_id:Number(row.template_id) }))
+      };
     },
     async addCatalog(area, name) {
       const result = await query("INSERT INTO exercise_catalog (body_area,name) VALUES ($1,$2) RETURNING id", [area, name]);

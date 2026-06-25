@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8">
@@ -12,14 +12,17 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=33">
+  <link rel="stylesheet" href="/style.css?v=35">
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="#"><span class="brand-mark"><img src="/brand/formae-mark.png" alt=""></span><span>FitTrack</span></a>
     <nav>
-      <button class="nav-item active" data-view="dashboard"><span>⌂</span> Panoramica</button>
-      <button class="nav-item" data-view="history"><span>◷</span> Storico</button>
+      <button class="nav-item active" data-view="dashboard"><span>H</span> Panoramica</button>
+      <button class="nav-item" data-view="workouts"><span>A</span> Allenamenti</button>
+      <button class="nav-item" data-view="calendar"><span>C</span> Calendario</button>
+      <button class="nav-item" data-view="groups"><span>G</span> Gruppi</button>
+      <button class="nav-item" data-view="history"><span>S</span> Storico</button>
     </nav>
     <div class="sidebar-note">
       <span>I tuoi dati sono protetti.</span>
@@ -52,7 +55,7 @@
           <h2>Ogni allenamento<br>conta.</h2>
           <p>Registra i progressi di tutti, un esercizio alla volta.</p>
         </div>
-        <div class="hero-graphic"><div class="pulse">↗</div></div>
+        <div class="hero-graphic"><div class="pulse">â†—</div></div>
       </div>
       <div class="stats" id="stats"></div>
       <section class="home-tabs" aria-label="Azioni principali">
@@ -61,7 +64,7 @@
           <strong>Anagrafica iscritti</strong>
           <small>Cerca, aggiungi o modifica i dati delle persone.</small>
         </button>
-        <button type="button" class="home-tab home-tab-primary" id="dashboard-new-workout">
+        <button type="button" class="home-tab home-tab-primary" data-go="workouts">
           <span>Allenamenti</span>
           <strong>Crea e gestisci</strong>
           <small>Registra una nuova sessione e poi ritrovala nello storico.</small>
@@ -72,7 +75,10 @@
           <small>Apri il catalogo esistente per aggiungere o rimuovere esercizi.</small>
         </button>
       </section>
-      <section class="schedule-panel">
+    </section>
+
+    <section id="calendar-view" class="view hidden">
+      <section class="schedule-panel page-panel">
         <div class="schedule-head">
           <div><p class="eyebrow">AGENDA</p><h2>Calendario allenamenti</h2></div>
           <label>Giorno
@@ -105,10 +111,36 @@
       </section>
     </section>
 
+    <section id="workouts-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">SESSIONI</p><h2>Allenamenti</h2></div>
+        <button class="secondary" id="new-workout">+ Nuovo allenamento</button>
+      </div>
+      <p class="section-help">Crea una sessione o apri gli ultimi allenamenti registrati per modificarli, inviare RPE o controllare i dettagli.</p>
+      <div id="workout-list" class="workout-list"></div>
+    </section>
+
+    <section id="groups-view" class="view hidden">
+      <div class="section-head">
+        <div><p class="eyebrow">ORGANIZZAZIONE</p><h2>Gruppi</h2></div>
+      </div>
+      <form id="group-form" class="group-form">
+        <input name="id" type="hidden">
+        <label>Nome gruppo<input name="name" placeholder="Es. Small group mattina" required></label>
+        <label>Colore<input name="color" type="color" value="#ffcc05"></label>
+        <label>Note<input name="notes" placeholder="Obiettivo, giorni, livello..."></label>
+        <div class="group-actions">
+          <button class="secondary hidden" id="group-cancel-edit" type="button">Annulla</button>
+          <button class="primary" id="group-submit" type="submit">Salva gruppo</button>
+        </div>
+      </form>
+      <div id="groups-grid" class="groups-grid"></div>
+    </section>
+
     <section id="history-view" class="view hidden">
       <div class="section-head">
         <div><p class="eyebrow">DIARIO</p><h2 id="history-title">Scegli una persona</h2></div>
-        <button class="secondary hidden" id="history-back">← Tutte le persone</button>
+        <button class="secondary hidden" id="history-back">â† Tutte le persone</button>
       </div>
       <p class="section-help" id="history-help">Clicca su un nome per vedere allenamenti, giornate e andamento.</p>
       <div id="history-people" class="history-people"></div>
@@ -169,15 +201,18 @@
   </main>
 
   <nav class="mobile-nav">
-    <button class="nav-item active" data-view="dashboard">⌂<small>Home</small></button>
-    <button class="nav-item" data-view="history">◷<small>Storico</small></button>
+    <button class="nav-item active" data-view="dashboard">H<small>Home</small></button>
+    <button class="nav-item" data-view="workouts">A<small>Allen.</small></button>
+    <button class="nav-item" data-view="calendar">C<small>Agenda</small></button>
+    <button class="nav-item" data-view="groups">G<small>Gruppi</small></button>
+    <button class="nav-item" data-view="history">S<small>Storico</small></button>
   </nav>
 
   <dialog id="workout-dialog">
     <form id="workout-form">
       <input name="id" type="hidden">
       <input name="groupIds" type="hidden">
-      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">NUOVA SESSIONE</p><h2>Registra allenamento</h2></div><button type="button" class="close">Ã—</button></div>
       <div class="form-grid">
         <label>Persona<select name="personId" id="person-select" required></select></label>
         <label>Data<input name="date" type="date" required></label>
@@ -237,7 +272,7 @@
   <dialog id="person-dialog">
     <form id="person-form">
       <input name="id" type="hidden">
-      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">×</button></div>
+      <div class="modal-head"><h2 id="person-dialog-title">Aggiungi persona</h2><button type="button" class="close">Ã—</button></div>
       <label>Nome<input name="name" placeholder="Es. Luca" required autofocus></label>
       <div class="form-grid">
         <label>Data di nascita<input name="birthDate" type="date"></label>
@@ -245,6 +280,7 @@
         <label>Altezza (cm)<input name="height" type="number" min="0" step="0.1"></label>
         <label>Peso (kg)<input name="weight" type="number" min="0" step="0.1"></label>
         <label>Telefono WhatsApp<input name="phone" type="tel" placeholder="+39..."></label>
+        <label>Gruppo<select name="groupId" id="person-group-select"></select></label>
       </div>
       <label>Note<input name="notes" placeholder="Informazioni facoltative"></label>
       <div class="person-form-actions">
@@ -256,7 +292,7 @@
 
   <dialog id="catalog-dialog">
     <form id="catalog-form">
-      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">×</button></div>
+      <div class="modal-head"><div><p class="eyebrow">CATALOGO</p><h2>Nuovo esercizio</h2></div><button type="button" class="close">Ã—</button></div>
       <label>Zona del corpo
         <select name="bodyArea" required>
           <option>Petto</option><option>Dorso</option><option>Spalle</option>
@@ -287,7 +323,7 @@
     <div class="install-content">
       <div class="modal-head">
         <div><p class="eyebrow">APP SUL TELEFONO</p><h2>Installa FitTrack</h2></div>
-        <button type="button" class="close">×</button>
+        <button type="button" class="close">Ã—</button>
       </div>
       <div class="install-icon"><img src="/icons/icon-192.png" alt=""></div>
       <div id="ios-install-help">
@@ -299,7 +335,7 @@
           <li>Conferma con <strong>Aggiungi</strong>.</li>
         </ol>
       </div>
-      <p class="install-note">L’app userà sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+      <p class="install-note">Lâ€™app userÃ  sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
     </div>
   </dialog>
 
@@ -328,10 +364,11 @@
         <option value="90">90 sec</option><option value="120">120 sec</option><option value="180">180 sec</option>
         <option value="240">240 sec</option><option value="300">300 sec</option>
       </select>
-      <button type="button" class="remove-exercise" aria-label="Rimuovi">×</button>
+      <button type="button" class="remove-exercise" aria-label="Rimuovi">Ã—</button>
     </div>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=33"></script>
+  <script src="/app.js?v=35"></script>
 </body>
 </html>
+

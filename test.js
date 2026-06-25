@@ -17,11 +17,11 @@ test("la pagina contiene le sezioni principali", () => {
   assert.match(html, /Persone/);
   assert.match(html, /home-tabs/);
   assert.match(html, /Anagrafica iscritti/);
-  assert.match(html, /dashboard-new-workout/);
+  assert.match(html, /data-go="workouts"/);
+  assert.match(html, /id="new-workout"/);
   assert.match(html, /Registra allenamento/);
   assert.doesNotMatch(html, /ATTIVITA RECENTI/);
   assert.doesNotMatch(html, /recent-workouts/);
-  assert.doesNotMatch(html, /id="new-workout"/);
 });
 
 test("il catalogo contiene esercizi per tutte le zone", () => {
@@ -73,7 +73,7 @@ test("RPE puo essere inviato con link WhatsApp pubblico", () => {
   assert.match(server, /rpe-link/);
   assert.match(server, /\/api\/workout-groups\/rpe-link/);
   assert.match(server, /function formaeWhatsappSignature/);
-  assert.match(server, /brand\/formae-mark\.png/);
+  assert.doesNotMatch(server, /function formaeLogoUrl/);
   assert.match(server, /\/api\/rpe\//);
   assert.match(server, /prepareRpeGroupLink/);
   assert.match(server, /https:\/\/wa\.me/);
@@ -93,6 +93,8 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
   const css = fs.readFileSync(path.join(__dirname, "public/style.css"), "utf8");
   assert.match(html, /Calendario allenamenti/);
+  assert.match(html, /id="calendar-view"/);
+  assert.match(html, /data-view="calendar"/);
   assert.match(html, /schedule-form/);
   assert.match(html, /schedule-person/);
   assert.match(html, /Leonardo/);
@@ -101,9 +103,10 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(app, /data-schedule-reminder/);
   assert.match(app, /function whatsappReminderUrl/);
   assert.match(app, /function scheduleReminderText/);
-  assert.match(app, /brand\/formae-mark\.png/);
+  assert.doesNotMatch(app, /formaeLogoUrl/);
   assert.match(app, /wa\.me/);
   assert.match(app, /function openScheduleEdit/);
+  assert.match(app, /function trainerColor/);
   assert.match(app, /data-edit-schedule/);
   assert.match(app, /data-delete-schedule/);
   assert.match(app, /method:id \? "PUT" : "POST"/);
@@ -115,6 +118,7 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(database, /async addSchedule/);
   assert.match(database, /async updateSchedule/);
   assert.match(css, /schedule-panel/);
+  assert.match(css, /trainer-color/);
   assert.match(css, /schedule-reminders/);
 });
 
@@ -145,18 +149,39 @@ test("gli allenamenti supportano modifica, RPE, operatore, fasi e secondi", () =
   assert.match(html, /RPE - sforzo percepito/);
   assert.match(html, /Leonardo/);
   assert.match(html, /Warm up/);
+  assert.match(html, /id="workouts-view"/);
   assert.match(html, /data-phase-section="warmup"/);
   assert.match(html, /data-add-phase="cooldown"/);
   assert.match(html, /class="seconds"/);
   assert.match(app, /data-edit-workout/);
   assert.match(app, /data-edit-workout-group/);
   assert.match(app, /function phaseList/);
+  assert.match(app, /function bodyAreasForPhase/);
   assert.match(app, /data-add-phase/);
   assert.match(server, /\/api\/workout-groups/);
   assert.match(app, /const method = groupIds\.length \|\| id \? "PUT" : "POST"/);
   assert.match(server, /req\.method === "PUT" && workoutMatch/);
   assert.match(database, /ALTER TABLE workouts ADD COLUMN/);
   assert.match(database, /seconds INTEGER NOT NULL DEFAULT 0/);
+});
+
+test("i gruppi sono gestibili e collegati alle persone", () => {
+  const html = fs.readFileSync(path.join(__dirname, "public/index.html"), "utf8");
+  const app = fs.readFileSync(path.join(__dirname, "public/app.js"), "utf8");
+  const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+  const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "public/style.css"), "utf8");
+  assert.match(html, /id="groups-view"/);
+  assert.match(html, /id="group-form"/);
+  assert.match(html, /person-group-select/);
+  assert.match(app, /function renderGroups/);
+  assert.match(app, /data-edit-group/);
+  assert.match(app, /\/api\/groups/);
+  assert.match(server, /function normalizeGroup/);
+  assert.match(server, /\/api\/groups/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS groups/);
+  assert.match(database, /group_id/);
+  assert.match(css, /groups-grid/);
 });
 
 test("il nuovo design include tema scuro e colori per zone", () => {
@@ -292,7 +317,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v24/);
+  assert.match(worker, /fittrack-shell-v26/);
   assert.match(worker, /brand\/formae-banner\.png/);
   assert.match(worker, /brand\/formae-mark\.png/);
 });

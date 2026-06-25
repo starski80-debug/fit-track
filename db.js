@@ -27,6 +27,13 @@ function createSqliteStore() {
       color TEXT NOT NULL DEFAULT '#6c63ff', phone TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT NOT NULL DEFAULT '#ffcc05',
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS workouts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
@@ -65,7 +72,7 @@ function createSqliteStore() {
   for (const [name, definition] of [
     ["birth_date", "TEXT NOT NULL DEFAULT ''"], ["height", "REAL NOT NULL DEFAULT 0"],
     ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"],
-    ["phone", "TEXT NOT NULL DEFAULT ''"]
+    ["phone", "TEXT NOT NULL DEFAULT ''"], ["group_id", "INTEGER NOT NULL DEFAULT 0"]
   ]) {
     if (!columns.includes(name)) db.exec(`ALTER TABLE people ADD COLUMN ${name} ${definition}`);
   }
@@ -102,6 +109,7 @@ function createSqliteStore() {
     },
     async dashboard() {
       const people = db.prepare("SELECT * FROM people ORDER BY name").all();
+      const groups = db.prepare("SELECT * FROM groups ORDER BY name COLLATE NOCASE").all();
       const catalog = db.prepare("SELECT * FROM exercise_catalog ORDER BY body_area, name COLLATE NOCASE").all();
       const schedule = db.prepare(`
         SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
@@ -114,18 +122,28 @@ function createSqliteStore() {
         ORDER BY w.workout_date DESC, w.id DESC
       `).all();
       const exercises = db.prepare("SELECT * FROM exercises WHERE workout_id = ? ORDER BY id");
-      return { people, catalog, schedule, workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) })) };
+      return { people, groups, catalog, schedule, workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) })) };
     },
     async addPerson(body) {
       return Number(db.prepare(`
-        INSERT INTO people (name, color, birth_date, height, weight, notes, phone) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone).lastInsertRowid);
+        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId).lastInsertRowid);
     },
     async updatePerson(id, body) {
-      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=? WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, id).changes > 0;
+      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=? WHERE id=?`)
+        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id).changes > 0;
     },
     async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
+    async addGroup(body) {
+      return Number(db.prepare("INSERT INTO groups (name, color, notes) VALUES (?, ?, ?)").run(body.name, body.color, body.notes).lastInsertRowid);
+    },
+    async updateGroup(id, body) {
+      return db.prepare("UPDATE groups SET name=?, color=?, notes=? WHERE id=?").run(body.name, body.color, body.notes, id).changes > 0;
+    },
+    async deleteGroup(id) {
+      db.prepare("UPDATE people SET group_id=0 WHERE group_id=?").run(id);
+      return db.prepare("DELETE FROM groups WHERE id=?").run(id).changes > 0;
+    },
     async addCatalog(area, name) {
       return Number(db.prepare("INSERT INTO exercise_catalog (body_area, name) VALUES (?, ?)").run(area, name).lastInsertRowid);
     },
@@ -282,6 +300,13 @@ function createPostgresStore() {
           phone TEXT NOT NULL DEFAULT '',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
+        CREATE TABLE IF NOT EXISTS groups (
+          id BIGSERIAL PRIMARY KEY,
+          name TEXT NOT NULL,
+          color TEXT NOT NULL DEFAULT '#ffcc05',
+          notes TEXT NOT NULL DEFAULT '',
+          created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
         CREATE TABLE IF NOT EXISTS workouts (
           id BIGSERIAL PRIMARY KEY, person_id BIGINT NOT NULL REFERENCES people(id) ON DELETE CASCADE,
           workout_date TEXT NOT NULL, duration INTEGER NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
@@ -314,6 +339,7 @@ function createPostgresStore() {
         ALTER TABLE people ADD COLUMN IF NOT EXISTS weight DOUBLE PRECISION NOT NULL DEFAULT 0;
         ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS group_id BIGINT NOT NULL DEFAULT 0;
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe_token TEXT NOT NULL DEFAULT '';
@@ -345,8 +371,9 @@ function createPostgresStore() {
       }
     },
     async dashboard() {
-      const [people, catalog, schedule, workouts, exercises] = await Promise.all([
+      const [people, groups, catalog, schedule, workouts, exercises] = await Promise.all([
         query("SELECT * FROM people ORDER BY name"),
+        query("SELECT * FROM groups ORDER BY LOWER(name)"),
         query("SELECT * FROM exercise_catalog ORDER BY body_area, LOWER(name)"),
         query(`SELECT s.*, p.name AS person_name, p.color AS person_color, p.phone AS person_phone
           FROM scheduled_sessions s JOIN people p ON p.id=s.person_id
@@ -363,7 +390,8 @@ function createPostgresStore() {
         byWorkout.get(key).push(exercise);
       }
       return {
-        people:people.rows.map((item) => ({ ...item, id:Number(item.id) })),
+        people:people.rows.map((item) => ({ ...item, id:Number(item.id), group_id:Number(item.group_id || 0) })),
+        groups:groups.rows.map((item) => ({ ...item, id:Number(item.id) })),
         catalog:catalog.rows.map((item) => ({ ...item, id:Number(item.id) })),
         schedule:schedule.rows.map((item) => ({ ...item, id:Number(item.id), person_id:Number(item.person_id) })),
         workouts:workouts.rows.map((item) => ({
@@ -380,17 +408,30 @@ function createPostgresStore() {
     },
     async addPerson(body) {
       const result = await query(`
-        INSERT INTO people (name,color,birth_date,height,weight,notes,phone) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id
-      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone]);
+        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
+      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId]);
       return Number(result.rows[0].id);
     },
     async updatePerson(id, body) {
-      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7 WHERE id=$8`,
-        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, id]);
+      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8 WHERE id=$9`,
+        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id]);
       return result.rowCount > 0;
     },
     async deletePerson(id) {
       const result = await query("DELETE FROM people WHERE id=$1", [id]);
+      return result.rowCount > 0;
+    },
+    async addGroup(body) {
+      const result = await query("INSERT INTO groups (name,color,notes) VALUES ($1,$2,$3) RETURNING id", [body.name, body.color, body.notes]);
+      return Number(result.rows[0].id);
+    },
+    async updateGroup(id, body) {
+      const result = await query("UPDATE groups SET name=$1,color=$2,notes=$3 WHERE id=$4", [body.name, body.color, body.notes, id]);
+      return result.rowCount > 0;
+    },
+    async deleteGroup(id) {
+      await query("UPDATE people SET group_id=0 WHERE group_id=$1", [id]);
+      const result = await query("DELETE FROM groups WHERE id=$1", [id]);
       return result.rowCount > 0;
     },
     async addCatalog(area, name) {

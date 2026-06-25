@@ -124,7 +124,16 @@ function normalizePerson(body) {
     height:finiteNumber(body.height, 0, 300),
     weight:finiteNumber(body.weight, 0, 1_000),
     notes:cleanText(body.notes, 2_000),
-    phone:cleanPhone(body.phone)
+    phone:cleanPhone(body.phone),
+    groupId:positiveInteger(body.groupId)
+  };
+}
+
+function normalizeGroup(body) {
+  return {
+    name:cleanText(body.name, 100),
+    color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#ffcc05",
+    notes:cleanText(body.notes, 1_000)
   };
 }
 
@@ -199,12 +208,8 @@ function publicBaseUrl(req) {
   return `${proto}://${req.headers.host || `localhost:${PORT}`}`;
 }
 
-function formaeLogoUrl(req) {
-  return `${publicBaseUrl(req)}/brand/formae-mark.png`;
-}
-
-function formaeWhatsappSignature(req) {
-  return `\n\nFormae - La tua forza, il tuo potenziale\nLogo: ${formaeLogoUrl(req)}`;
+function formaeWhatsappSignature() {
+  return `\n\nFormae - La tua forza, il tuo potenziale`;
 }
 
 function whatsappNumber(value) {
@@ -369,6 +374,27 @@ async function api(req, res, url) {
     return json(res, 200, { ok:true });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/groups") {
+    const body = normalizeGroup(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del gruppo." });
+    return json(res, 201, { id:await store.addGroup(body) });
+  }
+  const groupMatch = url.pathname.match(/^\/api\/groups\/(\d+)$/);
+  if (req.method === "PUT" && groupMatch) {
+    const body = normalizeGroup(await readBody(req));
+    if (!body.name) return json(res, 400, { error:"Inserisci il nome del gruppo." });
+    if (!await store.updateGroup(Number(groupMatch[1]), body)) {
+      return json(res, 404, { error:"Gruppo non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+  if (req.method === "DELETE" && groupMatch) {
+    if (!await store.deleteGroup(Number(groupMatch[1]))) {
+      return json(res, 404, { error:"Gruppo non trovato." });
+    }
+    return json(res, 200, { ok:true });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/catalog") {
     const body = await readBody(req);
     const area = cleanText(body.bodyArea, 50);
@@ -447,7 +473,7 @@ async function api(req, res, url) {
     const phone = whatsappNumber(workout.person_phone);
     if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
     const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
-    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature(req)}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per la sessione di allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature()}`;
     return json(res, 200, {
       ok:true,
       url:rpeUrl,
@@ -466,7 +492,7 @@ async function api(req, res, url) {
     const phone = whatsappNumber(workout.person_phone);
     if (!phone) return json(res, 400, { error:"Inserisci il telefono WhatsApp nella scheda della persona." });
     const rpeUrl = `${publicBaseUrl(req)}/rpe/${workout.rpe_token || token}`;
-    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature(req)}`;
+    const message = `Ciao ${workout.person_name}, indica il tuo RPE per l'allenamento del ${workout.workout_date}: ${rpeUrl}${formaeWhatsappSignature()}`;
     return json(res, 200, {
       ok:true,
       url:rpeUrl,

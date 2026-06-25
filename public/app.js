@@ -4,7 +4,6 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const areas = { Petto:"PET", Dorso:"DOR", Spalle:"SPA", Braccia:"BRA", Gambe:"GAM", Addome:"ADD", Cardio:"CAR", Altro:"ALT" };
 const phaseLabels = { warmup:"Warm up", main:"Main part", cooldown:"Cool down" };
-const formaeLogoUrl = `${window.location.origin}/brand/formae-mark.png`;
 const rpeLabels = {
   0:"Rest", 1:"Very Easy", 2:"Easy", 3:"Comfortable", 4:"Moderate", 5:"Challenging",
   6:"Sort of Hard", 7:"Hard", 8:"Really Hard", 9:"Extremely Hard", 10:"Maximum Effort"
@@ -57,10 +56,23 @@ function bodyAreaList() {
   return [...names].filter(Boolean).sort((a, b) => a.localeCompare(b, "it"));
 }
 
-function fillAreaSelect(select, selected = "") {
-  const current = selected || select.value || "Petto";
-  select.innerHTML = bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
-  select.value = bodyAreaList().includes(current) ? current : "Altro";
+function groupById(id) {
+  return (state.data?.groups || []).find((group) => group.id === Number(id)) || null;
+}
+
+function bodyAreasForPhase(phase, selected = "") {
+  const areas = bodyAreaList();
+  if (phase === "warmup" || phase === "cooldown") return ["Altro"];
+  const filtered = areas.filter((area) => area !== "Altro");
+  if (selected && selected !== "Altro" && !filtered.includes(selected)) filtered.push(selected);
+  return filtered.length ? filtered : areas;
+}
+
+function fillAreaSelect(select, selected = "", phase = "main") {
+  const options = bodyAreasForPhase(phase, selected);
+  const current = selected || select.value || options[0] || "Altro";
+  select.innerHTML = options.map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`).join("");
+  select.value = options.includes(current) ? current : options[0] || "Altro";
 }
 
 function toast(message) {
@@ -145,16 +157,20 @@ function workoutCard(workout) {
 }
 
 function formaeWhatsappSignature() {
-  return `\n\nFormae - La tua forza, il tuo potenziale\nLogo: ${formaeLogoUrl}`;
+  return `\n\nFormae - La tua forza, il tuo potenziale`;
 }
 
 function scheduleReminderText(item) {
   return `Ciao ${item.person_name}, ti ricordiamo l'allenamento del ${formatDate(item.scheduled_date)} alle ${item.scheduled_time} con ${item.trainer}. A presto!${formaeWhatsappSignature()}`;
 }
 
+function trainerColor(name = "") {
+  return { Leonardo:"#ffcc05", Michele:"#32d1ff", Giulia:"#ff6aa2" }[name] || "#6c63ff";
+}
+
 function scheduleCard(item) {
   const reminderText = scheduleReminderText(item);
-  return `<article class="schedule-item">
+  return `<article class="schedule-item" style="--trainer-color:${escapeHtml(trainerColor(item.trainer))}">
     <div class="schedule-time">${escapeHtml(item.scheduled_time || "--:--")}</div>
     <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
     <div class="schedule-body">
@@ -244,10 +260,14 @@ function render() {
   ].map(([label,value]) => `<div class="stat"><span>${label}</span><b>${value}</b></div>`).join("");
 
   renderSchedule();
+  renderGroups();
   renderHistory();
+  $("#workout-list").innerHTML = workouts.slice(0, 30).map(workoutCard).join("") ||
+    `<div class="empty">Nessun allenamento registrato.</div>`;
   const peopleFilter = state.peopleSearch.trim().toLowerCase();
   const visiblePeople = people.filter((person) => [
     person.name,
+    groupById(person.group_id)?.name,
     person.birth_date,
     person.height,
     person.weight,
@@ -256,7 +276,9 @@ function render() {
   ].some((value) => String(value || "").toLowerCase().includes(peopleFilter)));
   $("#people-grid").innerHTML = visiblePeople.map((person) => {
     const personWorkouts = workouts.filter((item) => item.person_id === person.id);
+    const group = groupById(person.group_id);
     const details = [
+      group ? `Gruppo: ${group.name}` : "",
       person.birth_date ? `Nato/a: ${formatDate(person.birth_date)}` : "",
       person.height ? `${person.height} cm` : "",
       person.weight ? `${person.weight} kg` : "",
@@ -275,11 +297,35 @@ function render() {
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
   $("#person-select").innerHTML = personOptions;
+  $("#person-group-select").innerHTML = [
+    `<option value="0">Nessun gruppo</option>`,
+    ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
+  ].join("");
   $("#catalog-filter").innerHTML = [
     `<option value="">Tutte le zone</option>`,
     ...bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
   ].join("");
   renderCatalog();
+}
+
+function renderGroups() {
+  const groups = state.data.groups || [];
+  const people = state.data.people || [];
+  $("#groups-grid").innerHTML = groups.map((group) => {
+    const members = people.filter((person) => Number(person.group_id || 0) === group.id);
+    return `<article class="group-card">
+      <div class="group-card-head">
+        <span class="group-color" style="background:${escapeHtml(group.color)}"></span>
+        <div><h3>${escapeHtml(group.name)}</h3><p>${members.length} ${members.length === 1 ? "persona" : "persone"}</p></div>
+      </div>
+      ${group.notes ? `<p class="group-notes">${escapeHtml(group.notes)}</p>` : ""}
+      <div class="group-members">${members.map((person) => `<button type="button" data-open-person-history="${person.id}">${escapeHtml(person.name)}</button>`).join("") || `<span>Nessuna persona assegnata.</span>`}</div>
+      <div class="group-card-actions">
+        <button type="button" class="secondary" data-edit-group="${group.id}">Modifica</button>
+        <button type="button" class="danger small-danger" data-delete-group="${group.id}">Elimina</button>
+      </div>
+    </article>`;
+  }).join("") || `<div class="empty">Nessun gruppo creato. Aggiungi il primo gruppo dal modulo sopra.</div>`;
 }
 
 function renderCatalog() {
@@ -511,6 +557,7 @@ function rpeTrendChart(days) {
 
 async function load() {
   state.data = await request("/api/dashboard");
+  if (!Array.isArray(state.data.groups)) state.data.groups = [];
   for (const item of state.data.catalog || []) {
     if (item.body_area === "Schiena") item.body_area = "Dorso";
   }
@@ -537,7 +584,8 @@ function switchView(view) {
   $(`#${view}-view`).classList.remove("hidden");
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === view));
   $("#page-title").textContent = {
-    dashboard:"Bentornato", history:"Il tuo diario", people:"Le persone", catalog:"I tuoi esercizi"
+    dashboard:"Bentornato", workouts:"Allenamenti", calendar:"Calendario", groups:"Gruppi",
+    history:"Il tuo diario", people:"Le persone", catalog:"I tuoi esercizi"
   }[view];
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -549,8 +597,8 @@ function phaseList(phase) {
 function addExercise(defaults = {}) {
   const row = $("#exercise-template").content.firstElementChild.cloneNode(true);
   const phase = phaseLabels[defaults.phase] ? defaults.phase : "main";
-  fillAreaSelect($(".body-area", row), defaults.bodyArea || "Petto");
   $(".phase", row).value = phase;
+  fillAreaSelect($(".body-area", row), defaults.bodyArea || (phase === "main" ? "Petto" : "Altro"), phase);
   updateExerciseOptions(row, defaults.name);
   $(".sets", row).value = defaults.sets || "";
   $(".reps", row).value = defaults.reps || "";
@@ -639,10 +687,32 @@ function openPerson(person = null) {
   form.elements.height.value = person?.height || "";
   form.elements.weight.value = person?.weight || "";
   form.elements.phone.value = person?.phone || "";
+  form.elements.groupId.value = person?.group_id || 0;
   form.elements.notes.value = person?.notes || "";
   $("#person-dialog-title").textContent = person ? "Modifica persona" : "Aggiungi persona";
   $("#delete-person").classList.toggle("hidden", !person);
   $("#person-dialog").showModal();
+}
+
+function resetGroupForm() {
+  const form = $("#group-form");
+  form.reset();
+  form.elements.id.value = "";
+  form.elements.color.value = "#ffcc05";
+  $("#group-submit").textContent = "Salva gruppo";
+  $("#group-cancel-edit").classList.add("hidden");
+}
+
+function openGroupEdit(group) {
+  const form = $("#group-form");
+  form.elements.id.value = group.id;
+  form.elements.name.value = group.name || "";
+  form.elements.color.value = group.color || "#ffcc05";
+  form.elements.notes.value = group.notes || "";
+  $("#group-submit").textContent = "Salva modifiche";
+  $("#group-cancel-edit").classList.remove("hidden");
+  switchView("groups");
+  form.scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
 document.addEventListener("click", async (event) => {
@@ -657,7 +727,7 @@ document.addEventListener("click", async (event) => {
     state.historyPersonId = null;
     renderHistory();
   }
-  if (event.target.closest("#dashboard-new-workout")) openWorkout();
+  if (event.target.closest("#new-workout")) openWorkout();
   if (event.target.closest("#new-person")) openPerson();
   if (event.target.closest("#new-catalog-exercise")) {
     if (state.data?.catalogFallback) return toast("Chiudi e riavvia FitTrack per modificare il catalogo.");
@@ -678,6 +748,22 @@ document.addEventListener("click", async (event) => {
     if (person) openPerson(person);
   }
   if (event.target.matches(".close")) event.target.closest("dialog").close();
+  const editGroupButton = event.target.closest("[data-edit-group]");
+  if (editGroupButton) {
+    const group = (state.data.groups || []).find((item) => item.id === Number(editGroupButton.dataset.editGroup));
+    if (group) openGroupEdit(group);
+  }
+  const deleteGroupButton = event.target.closest("[data-delete-group]");
+  if (deleteGroupButton && confirm("Eliminare questo gruppo? Le persone resteranno in anagrafica senza gruppo.")) {
+    try {
+      await request(`/api/groups/${deleteGroupButton.dataset.deleteGroup}`, { method:"DELETE" });
+      resetGroupForm();
+      await load();
+      toast("Gruppo eliminato.");
+    } catch (error) {
+      toast(error.message);
+    }
+  }
   const phaseAddButton = event.target.closest("[data-add-phase]");
   if (phaseAddButton) addExercise({ sets:3, reps:10, phase:phaseAddButton.dataset.addPhase });
   if (event.target.matches(".remove-exercise")) {
@@ -784,6 +870,7 @@ $("#schedule-date").addEventListener("change", (event) => {
   renderSchedule();
 });
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
+$("#group-cancel-edit").addEventListener("click", resetGroupForm);
 $("#catalog-form [name=bodyArea]").addEventListener("change", (event) => {
   $("#catalog-custom-area-wrap").classList.toggle("hidden", event.target.value !== "__custom__");
 });
@@ -872,7 +959,8 @@ $("#person-form").addEventListener("submit", async (event) => {
       method:id ? "PUT" : "POST",
       body:JSON.stringify({
         name:form.get("name"), color:form.get("color"), birthDate:form.get("birthDate"),
-        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"), notes:form.get("notes")
+        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"),
+        groupId:Number(form.get("groupId")), notes:form.get("notes")
       })
     });
     $("#person-dialog").close();
@@ -898,6 +986,30 @@ $("#delete-person").addEventListener("click", async () => {
     await load();
     toast("Persona eliminata.");
   } catch (error) { toast(error.message); }
+});
+
+$("#group-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formElement = event.currentTarget;
+  if (formElement.dataset.busy === "true") return;
+  formElement.dataset.busy = "true";
+  setFormBusy(formElement, true);
+  const form = new FormData(formElement);
+  try {
+    const id = form.get("id");
+    await request(id ? `/api/groups/${id}` : "/api/groups", {
+      method:id ? "PUT" : "POST",
+      body:JSON.stringify({ name:form.get("name"), color:form.get("color"), notes:form.get("notes") })
+    });
+    resetGroupForm();
+    await load();
+    toast(id ? "Gruppo aggiornato." : "Gruppo creato.");
+  } catch (error) {
+    toast(error.message);
+  } finally {
+    formElement.dataset.busy = "false";
+    setFormBusy(formElement, false);
+  }
 });
 
 $("#catalog-form").addEventListener("submit", async (event) => {
@@ -1029,8 +1141,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v33")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v33", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v35")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v35", "1");
     window.location.reload();
   });
 }

@@ -303,6 +303,7 @@ h2 { margin-bottom:0; }
   gap:16px;
 }
 .template-card {
+  min-width:0;
   overflow:hidden;
   border:1px solid var(--line);
   border-radius:20px;
@@ -310,28 +311,44 @@ h2 { margin-bottom:0; }
 }
 .template-card-head {
   display:flex;
+  flex-wrap:wrap;
   justify-content:space-between;
   gap:14px;
   padding:18px;
   background:#ffcc05;
   color:#111827;
 }
+.template-brand { text-align:center; flex:1 1 240px; }
+.template-brand h3 { margin:0; font-size:29px; letter-spacing:.04em; line-height:1; }
+.template-brand p { margin:6px 0 0; font-size:14px; font-weight:950; }
+.template-meta {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px 18px;
+  padding:10px 14px;
+  border-bottom:2px solid #222;
+  background:#fff;
+  color:#111827;
+  font-size:12px;
+  font-weight:900;
+}
 .template-card-head h3 { margin:0 0 5px; font-size:24px; }
 .template-card-head .eyebrow { color:#111827; }
-.template-card-head > div:last-child { display:flex; gap:8px; align-items:start; }
-.template-table { overflow:auto; }
+.template-card-head > div:last-child { display:flex; flex-wrap:wrap; gap:8px; align-items:start; justify-content:flex-end; }
+.template-table { width:100%; max-width:100%; overflow-x:auto; overscroll-behavior-x:contain; }
 .template-table-row {
   display:grid;
-  grid-template-columns:.35fr 1.8fr .48fr .65fr .65fr 2fr repeat(7,.32fr);
-  min-width:980px;
+  grid-template-columns:36px minmax(130px,1.8fr) 54px 66px 66px minmax(150px,2fr) repeat(7,28px);
+  min-width:760px;
 }
 .template-table-row span {
-  padding:10px;
+  padding:8px 6px;
   border-right:1px solid #222;
   border-bottom:1px solid #222;
-  font-size:13px;
+  font-size:12px;
   font-weight:800;
-  min-height:44px;
+  min-height:38px;
+  overflow-wrap:anywhere;
 }
 .template-table-head span {
   background:#222;
@@ -343,6 +360,19 @@ h2 { margin-bottom:0; }
 }
 .template-table-row:nth-child(even):not(.template-table-head) span {
   background:#fff;
+}
+@media (max-width:720px) {
+  .template-card-head { padding:14px; }
+  .template-brand { text-align:left; flex-basis:100%; }
+  .template-brand h3 { font-size:24px; }
+  .template-card-head > div:last-child { justify-content:flex-start; width:100%; }
+  .template-card-head > div:last-child button { flex:1 1 auto; }
+  .template-meta { font-size:11px; padding:9px 12px; }
+  .template-table-row {
+    grid-template-columns:30px minmax(110px,1.8fr) 44px 54px 54px minmax(120px,2fr) repeat(7,24px);
+    min-width:640px;
+  }
+  .template-table-row span { padding:7px 4px; font-size:10.5px; min-height:34px; }
 }
 .group-card {
   display:grid;

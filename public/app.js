@@ -525,7 +525,7 @@ function addTemplateRow(defaults = {}) {
 
 function renderTemplates() {
   const templates = state.data.templates || [];
-  const weekHeaders = ["1Â° week", "2Â° week", "3Â° week", "4Â° week", "5Â° week", "6Â° week", "7Â° week"];
+  const weekHeaders = ["1", "2", "3", "4", "5", "6", "7"];
   $("#templates-list").innerHTML = templates.map((template) => {
     const person = state.data.people.find((item) => item.id === Number(template.person_id));
     return `<article class="template-card">
@@ -1602,8 +1602,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v44")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v44", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v45")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v45", "1");
     window.location.reload();
   });
 }
@@ -1619,4 +1619,5 @@ async function initialize() {
   }
 }
 initialize();
+
 

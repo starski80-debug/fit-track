@@ -1,4 +1,4 @@
-const http = require("node:http");
+﻿const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
@@ -329,7 +329,7 @@ function appointmentHtml(item) {
 
 function templateSheetHtml(template) {
   const rows = template.rows?.length ? template.rows : [];
-  const weekHeaders = ["1° week", "2° week", "3° week", "4° week", "5° week", "6° week", "7° week"];
+  const weekHeaders = ["1", "2", "3", "4", "5", "6", "7"];
   return `<!doctype html>
 <html lang="it">
 <head>
@@ -474,7 +474,7 @@ function rpeHtml(workout) {
     <section class="card">
       <header>
         <h1>RPE - sforzo percepito</h1>
-        <p>${escapeHtml(workout.person_name)} · allenamento del ${escapeHtml(workout.workout_date)}</p>
+        <p>${escapeHtml(workout.person_name)} Â· allenamento del ${escapeHtml(workout.workout_date)}</p>
       </header>
       <div class="table">
         ${rows.map(([value, label, color]) => `<button type="button" data-rpe="${value}" style="background:${color}">${value} - ${escapeHtml(label)}</button>`).join("")}
@@ -1010,3 +1010,4 @@ async function shutdown(signal) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+

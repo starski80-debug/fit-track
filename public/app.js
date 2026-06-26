@@ -100,6 +100,24 @@ function fillCatalogAreaSelect(selected = "") {
   select.value = options.includes(current) ? current : options[0] || "__custom__";
 }
 
+function fillTemplateExerciseSelect(select, selected = "") {
+  const catalog = state.data?.catalog || [];
+  const grouped = catalog.reduce((groups, item) => {
+    if (!groups[item.body_area]) groups[item.body_area] = [];
+    groups[item.body_area].push(item.name);
+    return groups;
+  }, {});
+  const known = catalog.some((item) => item.name === selected);
+  select.innerHTML = [
+    `<option value="">Seleziona esercizio...</option>`,
+    ...Object.entries(grouped).sort(([left], [right]) => left.localeCompare(right, "it")).map(([area, exercises]) =>
+      `<optgroup label="${escapeHtml(area)}">${exercises.sort((left, right) => left.localeCompare(right, "it")).map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}</optgroup>`
+    ),
+    selected && !known ? `<option value="${escapeHtml(selected)}">${escapeHtml(selected)} (esercizio salvato)</option>` : ""
+  ].join("");
+  select.value = selected || "";
+}
+
 function toast(message) {
   const element = $("#toast");
   element.textContent = message;
@@ -511,16 +529,34 @@ function renderEmployees() {
   }).join("") || `<div class="empty">Nessun dipendente inserito.</div>`;
 }
 
-function addTemplateRow(defaults = {}) {
-  const row = $("#template-row-template").content.firstElementChild.cloneNode(true);
-  $(".template-block", row).value = defaults.block || "";
-  $(".template-exercise", row).value = defaults.exercise || "";
-  $(".template-sets", row).value = defaults.sets || "";
-  $(".template-reps", row).value = defaults.reps || "";
-  $(".template-rest", row).value = defaults.rest || "";
-  $(".template-notes", row).value = defaults.notes || "";
-  $(".template-weeks", row).value = defaults.weeks || "";
-  $("#template-rows").append(row);
+function templateBlocks(rows = []) {
+  const blocks = [];
+  (rows.length ? rows : [{}]).forEach((row, index) => {
+    const label = String(row.block || "").trim() || String(Math.floor(index / 3) + 1);
+    let block = blocks.find((item) => item.label === label && item.rows.length < 3);
+    if (!block) {
+      block = { label, rows:[] };
+      blocks.push(block);
+    }
+    block.rows.push(row);
+  });
+  return blocks;
+}
+
+function addTemplateBlock(defaults = [], blockLabel = "") {
+  const block = $("#template-block-template").content.firstElementChild.cloneNode(true);
+  const rows = Array.isArray(defaults) ? defaults : [defaults];
+  $(".template-block", block).value = blockLabel || rows[0]?.block || String($$(".template-block-editor").length + 1);
+  $(".template-sets", block).value = rows[0]?.sets || "";
+  $(".template-rest", block).value = rows[0]?.rest || "";
+  $$(".template-exercise-line", block).forEach((line, index) => {
+    const row = rows[index] || {};
+    fillTemplateExerciseSelect($(".template-exercise", line), row.exercise || "");
+    $(".template-reps", line).value = row.reps || "";
+    $(".template-notes", line).value = row.notes || "";
+    $(".template-weeks", line).value = row.weeks || "";
+  });
+  $("#template-rows").append(block);
 }
 
 function renderTemplates() {
@@ -539,19 +575,19 @@ function renderTemplates() {
       </div>
       <div class="template-meta"><span>Scheda: ${escapeHtml(template.title)}</span><span>${person ? `Cliente: ${escapeHtml(person.name)}` : "Scheda generale"}</span>${template.notes ? `<span>Note: ${escapeHtml(template.notes)}</span>` : ""}</div>
       <div class="template-table">
-        <div class="template-table-row template-table-head"><span></span><span>Allenamento A</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span>${weekHeaders.map((week) => `<span>${week}</span>`).join("")}</div>
-        ${(template.rows || []).map((row, index) => {
-          const weeks = String(row.weeks || "").split(/[,;|]/);
-          return `<div class="template-table-row">
-            <span>${escapeHtml(row.block || String(index + 1))}</span>
-            <span>${escapeHtml(row.exercise)}</span>
-            <span>${escapeHtml(row.sets)}</span>
-            <span>${escapeHtml(row.reps)}</span>
-            <span>${escapeHtml(row.rest)}</span>
-            <span>${escapeHtml(row.notes)}</span>
-            ${weekHeaders.map((_, weekIndex) => `<span>${escapeHtml(weeks[weekIndex] || "")}</span>`).join("")}
-          </div>`;
-        }).join("")}
+        <div class="template-table-row template-table-head"><span></span><span>Esercizi</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span>${weekHeaders.map((week) => `<span class="template-week-head"><b>${week}</b><small>week</small></span>`).join("")}</div>
+        ${templateBlocks(template.rows || []).map((block) => `<div class="template-block-group">
+          <span class="template-block-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.label)}</span>
+          <span class="template-sets-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.rows[0]?.sets || "")}</span>
+          <span class="template-rest-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.rows[0]?.rest || "")}</span>
+          ${block.rows.map((row) => {
+            const weeks = String(row.weeks || "").split(/[,;|]/);
+            return `<span class="template-exercise-cell">${escapeHtml(row.exercise)}</span>
+              <span>${escapeHtml(row.reps)}</span>
+              <span>${escapeHtml(row.notes)}</span>
+              ${weekHeaders.map((_, weekIndex) => `<span>${escapeHtml(weeks[weekIndex] || "")}</span>`).join("")}`;
+          }).join("")}
+        </div>`).join("")}
       </div>
     </article>`;
   }).join("") || `<div class="empty">Nessuna scheda creata.</div>`;
@@ -819,7 +855,7 @@ async function load() {
     ];
   }
   if (!Array.isArray(state.data.templates)) state.data.templates = [];
-  if (!$("#template-rows").children.length) addTemplateRow();
+  if (!$("#template-rows").children.length) addTemplateBlock();
   for (const item of state.data.catalog || []) {
     if (item.body_area === "Schiena") item.body_area = "Dorso";
   }
@@ -837,6 +873,7 @@ async function load() {
     );
     state.data.catalogFallback = true;
   }
+  $$(".template-exercise").forEach((select) => fillTemplateExerciseSelect(select, select.value));
   render();
 }
 
@@ -1004,7 +1041,7 @@ function resetTemplateForm() {
   form.reset();
   form.elements.id.value = "";
   $("#template-rows").innerHTML = "";
-  addTemplateRow();
+  addTemplateBlock();
   $("#template-cancel-edit").classList.add("hidden");
 }
 
@@ -1015,7 +1052,7 @@ function openTemplateEdit(template) {
   form.elements.personId.value = template.person_id || 0;
   form.elements.notes.value = template.notes || "";
   $("#template-rows").innerHTML = "";
-  (template.rows?.length ? template.rows : [{}]).forEach(addTemplateRow);
+  templateBlocks(template.rows || []).forEach((block) => addTemplateBlock(block.rows, block.label));
   $("#template-cancel-edit").classList.remove("hidden");
   switchView("templates");
   form.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -1132,10 +1169,10 @@ document.addEventListener("click", async (event) => {
       toast("Scheda eliminata.");
     } catch (error) { toast(error.message); }
   }
-  if (event.target.closest("#add-template-row")) addTemplateRow();
-  if (event.target.matches(".remove-template-row")) {
-    if ($$(".template-row").length > 1) event.target.closest(".template-row").remove();
-    else toast("Serve almeno una riga.");
+  if (event.target.closest("#add-template-block")) addTemplateBlock();
+  if (event.target.matches(".remove-template-block")) {
+    if ($$(".template-block-editor").length > 1) event.target.closest(".template-block-editor").remove();
+    else toast("Serve almeno un blocco.");
   }
   const phaseAddButton = event.target.closest("[data-add-phase]");
   if (phaseAddButton) addExercise({ sets:3, reps:10, phase:phaseAddButton.dataset.addPhase });
@@ -1419,15 +1456,20 @@ $("#template-form").addEventListener("submit", async (event) => {
   formElement.dataset.busy = "true";
   setFormBusy(formElement, true);
   const form = new FormData(formElement);
-  const rows = $$(".template-row").map((row) => ({
-    block:$(".template-block", row).value,
-    exercise:$(".template-exercise", row).value,
-    sets:$(".template-sets", row).value,
-    reps:$(".template-reps", row).value,
-    rest:$(".template-rest", row).value,
-    notes:$(".template-notes", row).value,
-    weeks:$(".template-weeks", row).value
-  }));
+  const rows = $$(".template-block-editor").flatMap((block) => {
+    const blockValue = $(".template-block", block).value;
+    const sets = $(".template-sets", block).value;
+    const rest = $(".template-rest", block).value;
+    return $$(".template-exercise-line", block).map((row) => ({
+      block:blockValue,
+      exercise:$(".template-exercise", row).value,
+      sets,
+      reps:$(".template-reps", row).value,
+      rest,
+      notes:$(".template-notes", row).value,
+      weeks:$(".template-weeks", row).value
+    }));
+  });
   try {
     const id = form.get("id");
     await request(id ? `/api/templates/${id}` : "/api/templates", {
@@ -1602,8 +1644,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v45")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v45", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v46")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v46", "1");
     window.location.reload();
   });
 }

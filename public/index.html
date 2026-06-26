@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=45">
+  <link rel="stylesheet" href="/style.css?v=46">
 </head>
 <body>
   <aside class="sidebar">
@@ -170,7 +170,7 @@
         <label>Note generali<input name="notes" placeholder="Obiettivo o periodo"></label>
         <div id="template-rows" class="template-rows"></div>
         <div class="template-actions">
-          <button type="button" class="secondary" id="add-template-row">+ Riga esercizio</button>
+          <button type="button" class="secondary" id="add-template-block">+ Blocco di 3 esercizi</button>
           <button type="button" class="secondary hidden" id="template-cancel-edit">Annulla</button>
           <button class="primary" type="submit">Salva scheda</button>
         </div>
@@ -428,20 +428,23 @@
       <button type="button" class="remove-exercise" aria-label="Rimuovi">Ã—</button>
     </div>
   </template>
-  <template id="template-row-template">
-    <div class="template-row">
-      <input class="template-block" placeholder="Blocco" aria-label="Blocco">
-      <input class="template-exercise" placeholder="Esercizio" aria-label="Esercizio">
-      <input class="template-sets" placeholder="Serie" aria-label="Serie">
-      <input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni">
-      <input class="template-rest" placeholder="Recupero" aria-label="Recupero">
-      <input class="template-notes" placeholder="Note" aria-label="Note">
-      <input class="template-weeks" placeholder="1-7 week" aria-label="Settimane">
-      <button type="button" class="remove-template-row" aria-label="Rimuovi">Ã—</button>
-    </div>
+  <template id="template-block-template">
+    <section class="template-block-editor">
+      <div class="template-block-editor-head">
+        <label>Blocco<input class="template-block" placeholder="1" aria-label="Numero blocco"></label>
+        <label>Serie<input class="template-sets" placeholder="Es. 3" aria-label="Serie del blocco"></label>
+        <label>Recupero<input class="template-rest" placeholder="Es. 1'30''" aria-label="Recupero del blocco"></label>
+        <button type="button" class="remove-template-block" aria-label="Rimuovi blocco">Rimuovi blocco</button>
+      </div>
+      <div class="template-block-exercises">
+        <div class="template-exercise-line"><b>1</b><select class="template-exercise" aria-label="Primo esercizio"></select><input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni primo esercizio"><input class="template-notes" placeholder="Note" aria-label="Note primo esercizio"><input class="template-weeks" placeholder="Week 1, 2, 3..." aria-label="Week primo esercizio"></div>
+        <div class="template-exercise-line"><b>2</b><select class="template-exercise" aria-label="Secondo esercizio"></select><input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni secondo esercizio"><input class="template-notes" placeholder="Note" aria-label="Note secondo esercizio"><input class="template-weeks" placeholder="Week 1, 2, 3..." aria-label="Week secondo esercizio"></div>
+        <div class="template-exercise-line"><b>3</b><select class="template-exercise" aria-label="Terzo esercizio"></select><input class="template-reps" placeholder="Ripetizioni" aria-label="Ripetizioni terzo esercizio"><input class="template-notes" placeholder="Note" aria-label="Note terzo esercizio"><input class="template-weeks" placeholder="Week 1, 2, 3..." aria-label="Week terzo esercizio"></div>
+      </div>
+    </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=45"></script>
+  <script src="/app.js?v=46"></script>
 </body>
 </html>
 

@@ -576,16 +576,17 @@ function renderTemplates() {
       <div class="template-meta"><span>Scheda: ${escapeHtml(template.title)}</span><span>${person ? `Cliente: ${escapeHtml(person.name)}` : "Scheda generale"}</span>${template.notes ? `<span>Note: ${escapeHtml(template.notes)}</span>` : ""}</div>
       <div class="template-table">
         <div class="template-table-row template-table-head"><span></span><span>Esercizi</span><span>Serie</span><span>Ripetizioni</span><span>Recupero</span><span>Note</span>${weekHeaders.map((week) => `<span class="template-week-head"><b>${week}</b><small>week</small></span>`).join("")}</div>
-        ${templateBlocks(template.rows || []).map((block) => `<div class="template-block-group">
-          <span class="template-block-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.label)}</span>
-          <span class="template-sets-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.rows[0]?.sets || "")}</span>
-          <span class="template-rest-cell" style="grid-row:span ${block.rows.length}">${escapeHtml(block.rows[0]?.rest || "")}</span>
-          ${block.rows.map((row) => {
+        ${templateBlocks(template.rows || []).map((block) => `<div class="template-block-group" style="grid-template-rows:repeat(${block.rows.length},minmax(38px,auto))">
+          <span class="template-block-cell" style="grid-column:1;grid-row:1 / span ${block.rows.length}">${escapeHtml(block.label)}</span>
+          <span class="template-sets-cell" style="grid-column:3;grid-row:1 / span ${block.rows.length}">${escapeHtml(block.rows[0]?.sets || "")}</span>
+          <span class="template-rest-cell" style="grid-column:5;grid-row:1 / span ${block.rows.length}">${escapeHtml(block.rows[0]?.rest || "")}</span>
+          ${block.rows.map((row, rowIndex) => {
             const weeks = String(row.weeks || "").split(/[,;|]/);
-            return `<span class="template-exercise-cell">${escapeHtml(row.exercise)}</span>
-              <span>${escapeHtml(row.reps)}</span>
-              <span>${escapeHtml(row.notes)}</span>
-              ${weekHeaders.map((_, weekIndex) => `<span>${escapeHtml(weeks[weekIndex] || "")}</span>`).join("")}`;
+            const gridRow = rowIndex + 1;
+            return `<span class="template-exercise-cell" style="grid-column:2;grid-row:${gridRow}">${escapeHtml(row.exercise)}</span>
+              <span style="grid-column:4;grid-row:${gridRow}">${escapeHtml(row.reps)}</span>
+              <span style="grid-column:6;grid-row:${gridRow}">${escapeHtml(row.notes)}</span>
+              ${weekHeaders.map((_, weekIndex) => `<span style="grid-column:${weekIndex + 7};grid-row:${gridRow}">${escapeHtml(weeks[weekIndex] || "")}</span>`).join("")}`;
           }).join("")}
         </div>`).join("")}
       </div>
@@ -1644,8 +1645,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v46")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v46", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v47")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v47", "1");
     window.location.reload();
   });
 }

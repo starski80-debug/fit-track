@@ -994,6 +994,7 @@ function openPerson(person = null) {
   form.elements.height.value = person?.height || "";
   form.elements.weight.value = person?.weight || "";
   form.elements.phone.value = person?.phone || "";
+  form.elements.clientPin.value = "";
   form.elements.groupId.value = person?.group_id || 0;
   form.elements.notes.value = person?.notes || "";
   $("#person-dialog-title").textContent = person ? "Modifica persona" : "Aggiungi persona";
@@ -1398,7 +1399,7 @@ $("#person-form").addEventListener("submit", async (event) => {
       method:id ? "PUT" : "POST",
       body:JSON.stringify({
         name:form.get("name"), color:form.get("color"), birthDate:form.get("birthDate"),
-        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"),
+        height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"), clientPin:form.get("clientPin"),
         groupId:Number(form.get("groupId")), notes:form.get("notes")
       })
     });
@@ -1670,8 +1671,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v48")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v48", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v50")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v50", "1");
     window.location.reload();
   });
 }

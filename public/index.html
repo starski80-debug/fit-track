@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=48">
+  <link rel="stylesheet" href="/style.css?v=50">
 </head>
 <body>
   <aside class="sidebar">
@@ -327,6 +327,7 @@
         <label>Altezza (cm)<input name="height" type="number" min="0" step="0.1"></label>
         <label>Peso (kg)<input name="weight" type="number" min="0" step="0.1"></label>
         <label>Telefono WhatsApp<input name="phone" type="tel" placeholder="+39..."></label>
+        <label>Codice temporaneo portale<input name="clientPin" type="password" inputmode="numeric" pattern="[0-9]{4,10}" placeholder="4-10 cifre"></label>
         <label>Gruppo<select name="groupId" id="person-group-select"></select></label>
       </div>
       <label>Note<input name="notes" placeholder="Informazioni facoltative"></label>
@@ -449,7 +450,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=48"></script>
+  <script src="/app.js?v=50"></script>
 </body>
 </html>
 

@@ -64,6 +64,20 @@ test("le persone possono essere modificate", () => {
   assert.match(app, /state\.peopleSearch/);
   assert.match(app, /function openPerson/);
   assert.match(server, /req\.method === "PUT" && personMatch/);
+  assert.match(html, /Codice temporaneo portale/);
+  assert.match(app, /clientPin/);
+});
+
+test("il portale clienti protegge i dati personali", () => {
+  const server = fs.readFileSync(path.join(__dirname, "server.js"), "utf8");
+  const database = fs.readFileSync(path.join(__dirname, "db.js"), "utf8");
+  const client = fs.readFileSync(path.join(__dirname, "public/client.js"), "utf8");
+  assert.equal(fs.existsSync(path.join(__dirname, "public/client.html")), true);
+  assert.match(server, /api\/client\/login/);
+  assert.match(server, /api\/client\/dashboard/);
+  assert.match(server, /client_pin_hash/);
+  assert.match(database, /client_pin_hash/);
+  assert.match(client, /api\/client\/bookings/);
 });
 
 test("RPE puo essere inviato con link WhatsApp pubblico", () => {
@@ -398,7 +412,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v38/);
+  assert.match(worker, /fittrack-shell-v40/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

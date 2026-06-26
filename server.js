@@ -92,6 +92,26 @@ function cookieHeader(value, maxAge) {
   return `fittrack_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${isProduction ? "; Secure" : ""}`;
 }
 
+function clientPinHash(pin) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  return `${salt}:${crypto.scryptSync(String(pin), salt, 32).toString("hex")}`;
+}
+
+function verifyClientPin(pin, stored) {
+  const [salt, hash] = String(stored || "").split(":");
+  if (!salt || !hash) return false;
+  return secureEqual(crypto.scryptSync(String(pin), salt, 32).toString("hex"), hash);
+}
+
+function clientCookieHeader(value, maxAge) {
+  return `fittrack_client=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${isProduction ? "; Secure" : ""}`;
+}
+
+function clientToken(person) {
+  const signature = crypto.createHmac("sha256", authSecret).update(`client-v1|${person.id}|${person.client_pin_hash}`).digest("hex");
+  return `${person.id}.${signature}`;
+}
+
 function cleanText(value, maxLength) {
   return String(value || "").trim().slice(0, maxLength);
 }
@@ -124,7 +144,8 @@ function normalizePerson(body) {
     weight:finiteNumber(body.weight, 0, 1_000),
     notes:cleanText(body.notes, 2_000),
     phone:cleanPhone(body.phone),
-    groupId:positiveInteger(body.groupId)
+    groupId:positiveInteger(body.groupId),
+    clientPin:/^\d{4,10}$/.test(String(body.clientPin || "")) ? String(body.clientPin) : ""
   };
 }
 
@@ -567,6 +588,52 @@ async function api(req, res, url) {
     return json(res, 200, { ok:true });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/client/login") {
+    if (!loginAllowed(req)) return json(res, 429, { error:"Troppi tentativi. Riprova tra alcuni minuti." });
+    const body = await readBody(req);
+    const phone = cleanPhone(body.phone).replace(/\D/g, "");
+    const data = await store.dashboard();
+    const person = data.people.find((item) => String(item.phone || "").replace(/\D/g, "") === phone);
+    if (!person || !verifyClientPin(body.pin, person.client_pin_hash)) {
+      registerFailedLogin(req); return json(res, 401, { error:"Numero o PIN non corretti." });
+    }
+    clearLoginAttempts(req);
+    return json(res, 200, { ok:true }, { "Set-Cookie":clientCookieHeader(clientToken(person), 60 * 60 * 24 * 30) });
+  }
+  if (req.method === "POST" && url.pathname === "/api/client/logout") {
+    return json(res, 200, { ok:true }, { "Set-Cookie":clientCookieHeader("", 0) });
+  }
+  if (url.pathname.startsWith("/api/client/")) {
+    const [id, signature] = String(cookies(req).fittrack_client || "").split(".");
+    const data = await store.dashboard();
+    const person = data.people.find((item) => item.id === Number(id));
+    if (!person || !secureEqual(signature || "", clientToken(person).split(".")[1])) return json(res, 401, { error:"Accesso cliente richiesto." });
+    if (req.method === "GET" && url.pathname === "/api/client/dashboard") {
+      const workouts = data.workouts.filter((item) => item.person_id === person.id);
+      return json(res, 200, { person:{ id:person.id, name:person.name, color:person.color }, employees:data.employees, schedule:data.schedule.filter((item) => item.person_id === person.id), workouts, templates:data.templates.filter((item) => Number(item.person_id) === person.id) });
+    }
+    if (req.method === "POST" && url.pathname === "/api/client/change-pin") {
+      const pin = String((await readBody(req)).pin || "");
+      if (!/^\d{4,10}$/.test(pin)) return json(res, 400, { error:"Il PIN deve contenere da 4 a 10 cifre." });
+      const updated = {
+        name:person.name, color:person.color, birthDate:person.birth_date, height:person.height,
+        weight:person.weight, notes:person.notes, phone:person.phone, groupId:person.group_id,
+        clientPinHash:clientPinHash(pin)
+      };
+      if (!await store.updatePerson(person.id, updated)) return json(res, 404, { error:"Profilo non trovato." });
+      const refreshed = { ...person, client_pin_hash:updated.clientPinHash };
+      return json(res, 200, { ok:true }, { "Set-Cookie":clientCookieHeader(clientToken(refreshed), 60 * 60 * 24 * 30) });
+    }
+    if (req.method === "POST" && url.pathname === "/api/client/bookings") {
+      const body = normalizeSchedule({ ...(await readBody(req)), personId:person.id, status:"scheduled" });
+      if (!body.date || !body.time) return json(res, 400, { error:"Scegli data e orario." });
+      body.trainer = body.trainer || "Da confermare";
+      body.notes = "Richiesta dal portale cliente";
+      return json(res, 201, { id:await store.addSchedule(body) });
+    }
+    return false;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/auth/status") {
     return json(res, 200, { authenticated:isAuthenticated(req), required:Boolean(appPassword) });
   }
@@ -591,6 +658,7 @@ async function api(req, res, url) {
     const thisMonth = new Date().toISOString().slice(0, 7);
     return json(res, 200, {
       ...data,
+      people:data.people.map(({ client_pin_hash, ...person }) => person),
       stats:{
         workouts:data.workouts.length, people:data.people.length, minutes:totalMinutes,
         monthWorkouts:data.workouts.filter((item) => item.workout_date.startsWith(thisMonth)).length
@@ -601,12 +669,14 @@ async function api(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/people") {
     const body = normalizePerson(await readBody(req));
     if (!body.name) return json(res, 400, { error:"Inserisci il nome." });
+    body.clientPinHash = body.clientPin ? clientPinHash(body.clientPin) : "";
     return json(res, 201, { id:await store.addPerson(body) });
   }
   const personMatch = url.pathname.match(/^\/api\/people\/(\d+)$/);
   if (req.method === "PUT" && personMatch) {
     const body = normalizePerson(await readBody(req));
     if (!body.name) return json(res, 400, { error:"Inserisci il nome." });
+    body.clientPinHash = body.clientPin ? clientPinHash(body.clientPin) : "";
     if (!await store.updatePerson(Number(personMatch[1]), body)) {
       return json(res, 404, { error:"Persona non trovata." });
     }
@@ -924,6 +994,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 503, { ok:false, database:store.type });
       }
     }
+    if (url.pathname === "/client" || url.pathname === "/client/") return serveFile(res, "/client.html");
     const appointmentPageMatch = url.pathname.match(/^\/appointment\/([a-f0-9]{32,80})$/i);
     if (appointmentPageMatch) {
       if (!ready || shuttingDown) return json(res, 503, { error:"Servizio temporaneamente non disponibile." });

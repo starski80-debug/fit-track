@@ -25,6 +25,7 @@ function createSqliteStore() {
     CREATE TABLE IF NOT EXISTS people (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
       color TEXT NOT NULL DEFAULT '#6c63ff', phone TEXT NOT NULL DEFAULT '',
+      client_pin_hash TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS groups (
@@ -100,7 +101,8 @@ function createSqliteStore() {
   for (const [name, definition] of [
     ["birth_date", "TEXT NOT NULL DEFAULT ''"], ["height", "REAL NOT NULL DEFAULT 0"],
     ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"],
-    ["phone", "TEXT NOT NULL DEFAULT ''"], ["group_id", "INTEGER NOT NULL DEFAULT 0"]
+    ["phone", "TEXT NOT NULL DEFAULT ''"], ["group_id", "INTEGER NOT NULL DEFAULT 0"],
+    ["client_pin_hash", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!columns.includes(name)) db.exec(`ALTER TABLE people ADD COLUMN ${name} ${definition}`);
   }
@@ -173,12 +175,12 @@ function createSqliteStore() {
     },
     async addPerson(body) {
       return Number(db.prepare(`
-        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId).lastInsertRowid);
+        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id, client_pin_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "").lastInsertRowid);
     },
     async updatePerson(id, body) {
-      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=? WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id).changes > 0;
+      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=?, client_pin_hash=CASE WHEN ?='' THEN client_pin_hash ELSE ? END WHERE id=?`)
+        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "", body.clientPinHash || "", id).changes > 0;
     },
     async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
     async addGroup(body) {
@@ -426,7 +428,7 @@ function createPostgresStore() {
     async init() {
       await query(`
         CREATE TABLE IF NOT EXISTS people (
-          id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6c63ff',
+          id BIGSERIAL PRIMARY KEY, name TEXT NOT NULL, color TEXT NOT NULL DEFAULT '#6c63ff', client_pin_hash TEXT NOT NULL DEFAULT '',
           birth_date TEXT NOT NULL DEFAULT '', height DOUBLE PRECISION NOT NULL DEFAULT 0,
           weight DOUBLE PRECISION NOT NULL DEFAULT 0, notes TEXT NOT NULL DEFAULT '',
           phone TEXT NOT NULL DEFAULT '',
@@ -500,6 +502,7 @@ function createPostgresStore() {
         ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS group_id BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS client_pin_hash TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe_token TEXT NOT NULL DEFAULT '';
@@ -581,13 +584,13 @@ function createPostgresStore() {
     },
     async addPerson(body) {
       const result = await query(`
-        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id
-      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId]);
+        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id,client_pin_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id
+      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || ""]);
       return Number(result.rows[0].id);
     },
     async updatePerson(id, body) {
-      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8 WHERE id=$9`,
-        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, id]);
+      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8,client_pin_hash=CASE WHEN $9='' THEN client_pin_hash ELSE $9 END WHERE id=$10`,
+        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "", id]);
       return result.rowCount > 0;
     },
     async deletePerson(id) {

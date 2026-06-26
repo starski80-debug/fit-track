@@ -412,7 +412,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v40/);
+  assert.match(worker, /fittrack-shell-v41/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

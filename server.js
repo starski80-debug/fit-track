@@ -624,6 +624,15 @@ async function api(req, res, url) {
       const refreshed = { ...person, client_pin_hash:updated.clientPinHash };
       return json(res, 200, { ok:true }, { "Set-Cookie":clientCookieHeader(clientToken(refreshed), 60 * 60 * 24 * 30) });
     }
+    if (req.method === "POST" && url.pathname === "/api/client/rpe") {
+      const body = await readBody(req);
+      const workout = data.workouts.find((item) => item.id === positiveInteger(body.workoutId) && item.person_id === person.id);
+      const rpe = Number(body.rpe);
+      if (!workout || !Number.isInteger(rpe) || rpe < 0 || rpe > 10) return json(res, 400, { error:"Valore RPE non valido." });
+      const linked = await store.prepareRpeLink(workout.id, crypto.randomBytes(24).toString("hex"));
+      if (!linked || !await store.setRpeByToken(linked.rpe_token, rpe)) return json(res, 404, { error:"Allenamento non trovato." });
+      return json(res, 200, { ok:true });
+    }
     if (req.method === "POST" && url.pathname === "/api/client/bookings") {
       const body = normalizeSchedule({ ...(await readBody(req)), personId:person.id, status:"scheduled" });
       if (!body.date || !body.time) return json(res, 400, { error:"Scegli data e orario." });

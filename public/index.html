@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=47">
+  <link rel="stylesheet" href="/style.css?v=48">
 </head>
 <body>
   <aside class="sidebar">
@@ -92,7 +92,12 @@
         <form id="schedule-form" class="schedule-form">
           <input name="id" type="hidden">
           <label>Persona
-            <select name="personId" id="schedule-person" required></select>
+            <select name="personId" id="schedule-person"></select>
+          </label>
+          <label>Oppure gruppo
+            <select name="groupId" id="schedule-group">
+              <option value="0">Nessun gruppo</option>
+            </select>
           </label>
           <label>Personal trainer
             <select name="trainer" required>
@@ -444,7 +449,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=47"></script>
+  <script src="/app.js?v=48"></script>
 </body>
 </html>
 

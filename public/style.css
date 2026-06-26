@@ -48,7 +48,7 @@ h2 { margin-bottom:0; }
 .schedule-head { display:flex; align-items:end; justify-content:space-between; gap:18px; margin-bottom:17px; }
 .schedule-head h2 { font-size:23px; }
 .schedule-head label { min-width:210px; margin:0; }
-.schedule-form { display:grid; grid-template-columns:1.4fr 1fr .8fr 1.5fr auto; gap:12px; align-items:end; padding:14px; background:var(--surface-soft,#f7f7fb); border:1px solid var(--line); border-radius:16px; }
+.schedule-form { display:grid; grid-template-columns:1.15fr 1.15fr 1fr .8fr 1.1fr auto; gap:12px; align-items:end; padding:14px; background:var(--surface-soft,#f7f7fb); border:1px solid var(--line); border-radius:16px; }
 .schedule-form label { margin:0; }
 .schedule-form .primary { min-height:46px; white-space:nowrap; }
 .schedule-actions { display:flex; align-items:center; gap:8px; }
@@ -369,8 +369,8 @@ h2 { margin-bottom:0; }
 .template-table-row,
 .template-block-group {
   display:grid;
-  grid-template-columns:42px minmax(155px,1.8fr) 58px 72px 72px minmax(170px,2fr) repeat(7,30px);
-  min-width:780px;
+  grid-template-columns:42px minmax(190px,2fr) 58px 98px 90px minmax(100px,.9fr) repeat(7,30px);
+  min-width:820px;
 }
 .template-table-row span,
 .template-block-group span {
@@ -387,6 +387,7 @@ h2 { margin-bottom:0; }
   color:#ffcc05;
   text-transform:uppercase;
 }
+.template-table-head span:not(.template-week-head) { white-space:nowrap; overflow-wrap:normal; }
 .template-table-head .template-week-head {
   display:grid;
   place-items:center;
@@ -416,8 +417,8 @@ h2 { margin-bottom:0; }
   .template-meta { font-size:11px; padding:9px 12px; }
   .template-table-row,
   .template-block-group {
-    grid-template-columns:30px minmax(110px,1.8fr) 44px 54px 54px minmax(120px,2fr) repeat(7,25px);
-    min-width:650px;
+    grid-template-columns:30px minmax(130px,2fr) 44px 76px 70px minmax(78px,.9fr) repeat(7,25px);
+    min-width:690px;
   }
   .template-table-row span { padding:7px 4px; font-size:10.5px; min-height:34px; }
   .template-block-group span { padding:7px 4px; font-size:10.5px; min-height:34px; }

@@ -259,6 +259,7 @@ function resetScheduleForm() {
   const form = $("#schedule-form");
   form.reset();
   form.elements.id.value = "";
+  form.elements.groupId.value = "0";
   form.elements.date.value = state.scheduleDate;
   $("#schedule-submit").textContent = "Aggiungi in agenda";
   $("#schedule-cancel-edit").classList.add("hidden");
@@ -268,14 +269,15 @@ function openScheduleEdit(item) {
   const form = $("#schedule-form");
   state.scheduleDate = item.scheduled_date;
   $("#schedule-date").value = state.scheduleDate;
+  renderSchedule();
   form.elements.id.value = item.id;
   form.elements.personId.value = item.person_id;
+  form.elements.groupId.value = "0";
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
   form.elements.date.value = item.scheduled_date || state.scheduleDate;
   $("#schedule-submit").textContent = "Salva modifiche";
   $("#schedule-cancel-edit").classList.remove("hidden");
-  renderSchedule();
   form.scrollIntoView({ behavior:"smooth", block:"center" });
 }
 
@@ -292,6 +294,10 @@ function renderSchedule() {
   $("#schedule-person").innerHTML = state.data.people.map((person) =>
     `<option value="${person.id}">${escapeHtml(person.name)}</option>`
   ).join("");
+  $("#schedule-group").innerHTML = [
+    `<option value="0">Nessun gruppo</option>`,
+    ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
+  ].join("");
   const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
   const upcoming = schedule
     .filter((item) => item.scheduled_date > state.scheduleDate)
@@ -1281,6 +1287,12 @@ $("#schedule-date").addEventListener("change", (event) => {
   state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
   renderSchedule();
 });
+$("#schedule-person").addEventListener("change", (event) => {
+  if (event.target.value) $("#schedule-group").value = "0";
+});
+$("#schedule-group").addEventListener("change", (event) => {
+  if (Number(event.target.value)) $("#schedule-person").value = "";
+});
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
 $("#group-cancel-edit").addEventListener("click", resetGroupForm);
 $("#employee-cancel-edit").addEventListener("click", resetEmployeeForm);
@@ -1298,19 +1310,32 @@ $("#schedule-form").addEventListener("submit", async (event) => {
   const form = new FormData(formElement);
   try {
     const id = form.get("id");
-    await request(id ? `/api/schedule/${id}` : "/api/schedule", {
-      method:id ? "PUT" : "POST",
-      body:JSON.stringify({
-        personId:Number(form.get("personId")),
-        trainer:form.get("trainer"),
-        date:form.get("date") || state.scheduleDate,
-        time:form.get("time"),
-        notes:""
-      })
-    });
+    const groupId = Number(form.get("groupId"));
+    const group = (state.data.groups || []).find((item) => item.id === groupId);
+    const recipients = group
+      ? state.data.people.filter((person) => Number(person.group_id) === groupId)
+      : state.data.people.filter((person) => person.id === Number(form.get("personId")));
+    if (!recipients.length) throw new Error(group ? "Il gruppo selezionato non ha iscritti." : "Seleziona una persona o un gruppo.");
+    const payload = {
+      trainer:form.get("trainer"),
+      date:form.get("date") || state.scheduleDate,
+      time:form.get("time"),
+      notes:group ? `Gruppo: ${group.name}` : ""
+    };
+    if (id) {
+      await request(`/api/schedule/${id}`, {
+        method:"PUT",
+        body:JSON.stringify({ ...payload, personId:recipients[0].id })
+      });
+    } else {
+      await Promise.all(recipients.map((person) => request("/api/schedule", {
+        method:"POST",
+        body:JSON.stringify({ ...payload, personId:person.id })
+      })));
+    }
     resetScheduleForm();
     await load();
-    toast(id ? "Appuntamento aggiornato." : "Appuntamento aggiunto in agenda.");
+    toast(id ? "Appuntamento aggiornato." : group ? `Appuntamenti creati per ${recipients.length} iscritti.` : "Appuntamento aggiunto in agenda.");
   } catch (error) {
     toast(error.message);
   } finally {
@@ -1645,8 +1670,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v47")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v47", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v48")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v48", "1");
     window.location.reload();
   });
 }

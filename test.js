@@ -107,8 +107,11 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(html, /data-view="calendar"/);
   assert.match(html, /schedule-form/);
   assert.match(html, /schedule-person/);
+  assert.match(html, /schedule-group/);
   assert.match(html, /Leonardo/);
   assert.match(app, /function renderSchedule/);
+  assert.match(app, /Appuntamenti creati per/);
+  assert.match(app, /Il gruppo selezionato non ha iscritti/);
   assert.match(app, /function renderCalendarGrid/);
   assert.match(app, /function openDayDialog/);
   assert.match(app, /data-calendar-day/);
@@ -395,7 +398,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v37/);
+  assert.match(worker, /fittrack-shell-v38/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

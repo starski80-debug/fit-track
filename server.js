@@ -194,6 +194,20 @@ function normalizeTemplate(body) {
   };
 }
 
+function templateBlocks(rows = []) {
+  const blocks = [];
+  (rows.length ? rows : []).forEach((row, index) => {
+    const label = String(row.block || "").trim() || String(Math.floor(index / 3) + 1);
+    let block = blocks.find((item) => item.label === label && item.rows.length < 3);
+    if (!block) {
+      block = { label, rows:[] };
+      blocks.push(block);
+    }
+    block.rows.push(row);
+  });
+  return blocks;
+}
+
 function normalizeWorkoutIds(value) {
   return [...new Set((Array.isArray(value) ? value : [])
     .map(positiveInteger)
@@ -329,6 +343,7 @@ function appointmentHtml(item) {
 
 function templateSheetHtml(template) {
   const rows = template.rows?.length ? template.rows : [];
+  const blocks = templateBlocks(rows);
   const weekHeaders = ["1", "2", "3", "4", "5", "6", "7"];
   return `<!doctype html>
 <html lang="it">
@@ -353,13 +368,16 @@ function templateSheetHtml(template) {
     td { border:2px solid var(--grid); padding:10px 8px; min-height:42px; font-size:14px; font-weight:800; text-align:center; vertical-align:middle; }
     td.exercise { text-align:center; font-size:15px; }
     td.notes { text-align:center; font-size:13px; line-height:1.25; }
-    tbody tr:nth-child(odd) td { background:#d9d9d9; }
-    tbody tr:nth-child(even) td { background:#fff; }
+    tbody tr.block-grey td { background:#d9d9d9; }
+    tbody tr.block-white td { background:#fff; }
     .block { width:44px; font-size:18px; }
     .exercise { width:210px; }
     .sets,.reps,.rest { width:95px; }
     .notes { width:260px; }
-    .week { width:46px; }
+    .week { width:29px; padding-left:1px; padding-right:1px; }
+    th.week b, th.week small { display:block; line-height:1; }
+    th.week b { font-size:13px; }
+    th.week small { margin-top:2px; font-size:8px; text-transform:lowercase; }
     .empty { padding:24px; text-align:center; font-weight:800; }
     @media (max-width:720px) {
       .wrap { padding:10px; }
@@ -387,7 +405,7 @@ function templateSheetHtml(template) {
       .reps { width:7%; }
       .rest { width:7%; }
       .notes { width:22%; }
-      .week { width:3.7%; }
+      .week { width:3.4%; }
       @page { size:A4 portrait; margin:8mm; }
     }
   </style>
@@ -406,24 +424,24 @@ function templateSheetHtml(template) {
         <thead>
           <tr>
             <th class="block"></th>
-            <th class="exercise">Allenamento A</th>
+            <th class="exercise">Esercizi</th>
             <th class="sets">Serie</th>
             <th class="reps">Ripetizioni</th>
             <th class="rest">Recupero</th>
             <th class="notes">Note</th>
-            ${weekHeaders.map((week) => `<th class="week">${week}</th>`).join("")}
+            ${weekHeaders.map((week) => `<th class="week"><b>${week}</b><small>week</small></th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${rows.map((row, index) => `<tr>
-            <td class="block">${escapeHtml(row.block || String(index + 1))}</td>
+          ${blocks.map((block, blockIndex) => block.rows.map((row, index) => `<tr class="${blockIndex % 2 === 0 ? "block-grey" : "block-white"}">
+            ${index === 0 ? `<td class="block" rowspan="${block.rows.length}">${escapeHtml(block.label)}</td>` : ""}
             <td class="exercise">${escapeHtml(row.exercise)}</td>
-            <td class="sets">${escapeHtml(row.sets)}</td>
+            ${index === 0 ? `<td class="sets" rowspan="${block.rows.length}">${escapeHtml(block.rows[0]?.sets || "")}</td>` : ""}
             <td class="reps">${escapeHtml(row.reps)}</td>
-            <td class="rest">${escapeHtml(row.rest)}</td>
+            ${index === 0 ? `<td class="rest" rowspan="${block.rows.length}">${escapeHtml(block.rows[0]?.rest || "")}</td>` : ""}
             <td class="notes">${escapeHtml(row.notes)}</td>
             ${weekHeaders.map((_, weekIndex) => `<td class="week">${escapeHtml(String(row.weeks || "").split(/[,;|]/)[weekIndex] || "")}</td>`).join("")}
-          </tr>`).join("")}
+          </tr>`).join("")).join("")}
         </tbody>
       </table>` : `<div class="empty">Scheda senza esercizi.</div>`}
     </section>

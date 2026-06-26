@@ -230,6 +230,11 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(app, /template-brand/);
   assert.match(app, /template-meta/);
   assert.match(app, /const weekHeaders = \["1", "2", "3", "4", "5", "6", "7"\]/);
+  assert.match(app, /template-week-head/);
+  assert.match(app, /function fillTemplateExerciseSelect/);
+  assert.match(app, /template-block-editor/);
+  assert.match(server, /rowspan=/);
+  assert.match(server, /block-grey/);
   assert.match(app, /function templateWhatsappUrl/);
   assert.match(app, /data-template-whatsapp/);
   assert.match(app, /\/api\/templates\/\$\{templateWhatsappButton\.dataset\.templateWhatsapp\}\/share-link/);
@@ -251,7 +256,7 @@ test("dipendenti e schede di allenamento sono gestibili", () => {
   assert.match(database, /async prepareTemplateShareLink/);
   assert.match(database, /async templateByShareToken/);
   assert.match(css, /template-table/);
-  assert.match(css, /repeat\(7,28px\)/);
+  assert.match(css, /repeat\(7,30px\)/);
   assert.match(css, /overflow-x:auto/);
 });
 
@@ -390,7 +395,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v35/);
+  assert.match(worker, /fittrack-shell-v36/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

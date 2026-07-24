@@ -190,6 +190,7 @@ function workoutCard(workout) {
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
         `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} Â· ${escapeHtml(item.name)}</span>`
       ).join("")}</div>
+      ${workout.notes ? `<p class="workout-note">${escapeHtml(workout.notes)}</p>` : ""}
     </div>
     <div class="workout-side">
       <b>${workout.duration} min</b>
@@ -1010,6 +1011,7 @@ function openWorkout(workout = null) {
   form.elements.duration.value = workout?.duration || 45;
   form.elements.operator.value = workout?.operator || workout?.trainer || "";
   form.elements.rpe.value = workout?.rpe || 0;
+  form.elements.notes.value = workout?.notes || "";
   $$("[data-phase-list]").forEach((list) => { list.innerHTML = ""; });
   const exercises = workout?.exercises?.length ? workout.exercises : [{ sets:3, reps:10, phase:"main" }];
   for (const exercise of exercises) {
@@ -1359,12 +1361,8 @@ $("#schedule-people-picker").addEventListener("change", (event) => {
 $("#schedule-group").addEventListener("change", (event) => {
   const groupId = Number(event.target.value);
   if (groupId) {
-    const ids = state.data.people
-      .filter((person) => Number(person.group_id || 0) === groupId)
-      .map((person) => person.id);
     setSchedulePeopleDropdown(true);
     renderSchedulePeoplePicker();
-    setScheduleSelectedPeople(ids);
   } else {
     renderSchedulePeoplePicker();
   }
@@ -1389,12 +1387,8 @@ $("#schedule-form").addEventListener("submit", async (event) => {
     const groupId = Number(form.get("groupId"));
     const group = (state.data.groups || []).find((item) => item.id === groupId);
     const selectedIds = selectedSchedulePeople();
-    const recipients = selectedIds.length
-      ? state.data.people.filter((person) => selectedIds.includes(person.id))
-      : group
-        ? state.data.people.filter((person) => Number(person.group_id) === groupId)
-        : [];
-    if (!recipients.length) throw new Error(group ? "Il gruppo selezionato non ha iscritti." : "Seleziona una o piu persone.");
+    const recipients = state.data.people.filter((person) => selectedIds.includes(person.id));
+    if (!recipients.length) throw new Error("Seleziona una o piu persone dalla lista.");
     if (id && recipients.length !== 1) throw new Error("Per modificare un appuntamento gia creato seleziona una sola persona.");
     const payload = {
       trainer:form.get("trainer"),
@@ -1461,7 +1455,7 @@ $("#workout-form").addEventListener("submit", async (event) => {
       body:JSON.stringify({
         personId:Number(form.get("personId")), date:form.get("date"),
         duration:Number(form.get("duration")), operator:form.get("operator"),
-        rpe:Number(form.get("rpe")), notes:"", workoutIds:groupIds, exercises
+        rpe:Number(form.get("rpe")), notes:form.get("notes"), workoutIds:groupIds, exercises
       })
     });
     $("#workout-dialog").close();
@@ -1760,8 +1754,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v53")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v53", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v54")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v54", "1");
     window.location.reload();
   });
 }

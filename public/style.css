@@ -109,6 +109,28 @@ h2 { margin-bottom:0; }
 .people-picker-empty { grid-column:1 / -1; margin:0; }
 .schedule-assign-group { align-self:center; display:flex; gap:9px; align-items:center; font-weight:800; }
 .schedule-assign-group input { width:18px; height:18px; margin:0; accent-color:#ffcc05; }
+.workout-notes-field { grid-column:1 / -1; }
+.workout-notes-field textarea {
+  width:100%;
+  resize:vertical;
+  min-height:82px;
+  border:1px solid #d9ddea;
+  border-radius:13px;
+  padding:12px 13px;
+  background:var(--surface);
+  color:var(--ink);
+  font:inherit;
+}
+.workout-note {
+  margin:10px 0 0;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:var(--surface-soft);
+  color:var(--muted);
+  font-size:13px;
+  font-weight:700;
+}
 .schedule-list { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
 .schedule-column { min-width:0; }
 .schedule-reminders { grid-column:1 / -1; padding:15px; border:1px solid #cdeedd; border-radius:18px; background:#f3fbf7; }

@@ -1,6 +1,7 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), workoutPersonId:null, groupDetailId:null
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"",
+  workoutPersonId:null, groupDetailId:null
 };
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -255,12 +256,49 @@ function scheduleCard(item) {
   </article>`;
 }
 
+function selectedSchedulePeople() {
+  return $$("#schedule-people-picker input[type=checkbox]:checked")
+    .map((input) => Number(input.value))
+    .filter(Boolean);
+}
+
+function setScheduleSelectedPeople(ids = []) {
+  const selected = new Set(ids.map(Number));
+  $$("#schedule-people-picker input[type=checkbox]").forEach((input) => {
+    input.checked = selected.has(Number(input.value));
+  });
+}
+
+function renderSchedulePeoplePicker() {
+  const current = new Set(selectedSchedulePeople());
+  const groupId = Number($("#schedule-group")?.value || 0);
+  const search = state.schedulePeopleSearch.trim().toLowerCase();
+  const people = (state.data.people || []).filter((person) => {
+    const matchesSearch = !search || [person.name, person.phone, person.notes, groupById(person.group_id)?.name]
+      .some((value) => String(value || "").toLowerCase().includes(search));
+    const matchesGroup = !groupId || Number(person.group_id || 0) === groupId || current.has(person.id);
+    return matchesSearch && matchesGroup;
+  });
+  $("#schedule-people-picker").innerHTML = people.map((person) => {
+    const group = groupById(person.group_id);
+    return `<label class="people-picker-item">
+      <input type="checkbox" value="${person.id}" ${current.has(person.id) ? "checked" : ""}>
+      <span class="avatar mini-avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0] || "?")}</span>
+      <span><b>${escapeHtml(person.name)}</b>${group ? `<small>${escapeHtml(group.name)}</small>` : `<small>Senza gruppo</small>`}</span>
+    </label>`;
+  }).join("") || `<div class="empty people-picker-empty">Nessuna persona trovata.</div>`;
+}
+
 function resetScheduleForm() {
   const form = $("#schedule-form");
   form.reset();
   form.elements.id.value = "";
   form.elements.groupId.value = "0";
   form.elements.date.value = state.scheduleDate;
+  state.schedulePeopleSearch = "";
+  $("#schedule-people-search").value = "";
+  setScheduleSelectedPeople([]);
+  renderSchedulePeoplePicker();
   $("#schedule-submit").textContent = "Aggiungi in agenda";
   $("#schedule-cancel-edit").classList.add("hidden");
 }
@@ -271,8 +309,8 @@ function openScheduleEdit(item) {
   $("#schedule-date").value = state.scheduleDate;
   renderSchedule();
   form.elements.id.value = item.id;
-  form.elements.personId.value = item.person_id;
   form.elements.groupId.value = "0";
+  setScheduleSelectedPeople([item.person_id]);
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
   form.elements.date.value = item.scheduled_date || state.scheduleDate;
@@ -291,13 +329,13 @@ function renderSchedule() {
     select.innerHTML = employeeOptions;
     select.value = current;
   });
-  $("#schedule-person").innerHTML = state.data.people.map((person) =>
-    `<option value="${person.id}">${escapeHtml(person.name)}</option>`
-  ).join("");
+  const currentGroup = $("#schedule-group").value;
   $("#schedule-group").innerHTML = [
     `<option value="0">Nessun gruppo</option>`,
     ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
   ].join("");
+  $("#schedule-group").value = currentGroup || "0";
+  renderSchedulePeoplePicker();
   const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
   const upcoming = schedule
     .filter((item) => item.scheduled_date > state.scheduleDate)
@@ -1288,11 +1326,21 @@ $("#schedule-date").addEventListener("change", (event) => {
   state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
   renderSchedule();
 });
-$("#schedule-person").addEventListener("change", (event) => {
-  if (event.target.value) $("#schedule-group").value = "0";
+$("#schedule-people-search").addEventListener("input", (event) => {
+  state.schedulePeopleSearch = event.target.value;
+  renderSchedulePeoplePicker();
 });
 $("#schedule-group").addEventListener("change", (event) => {
-  if (Number(event.target.value)) $("#schedule-person").value = "";
+  const groupId = Number(event.target.value);
+  if (groupId) {
+    const ids = state.data.people
+      .filter((person) => Number(person.group_id || 0) === groupId)
+      .map((person) => person.id);
+    renderSchedulePeoplePicker();
+    setScheduleSelectedPeople(ids);
+  } else {
+    renderSchedulePeoplePicker();
+  }
 });
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
 $("#group-cancel-edit").addEventListener("click", resetGroupForm);
@@ -1313,16 +1361,30 @@ $("#schedule-form").addEventListener("submit", async (event) => {
     const id = form.get("id");
     const groupId = Number(form.get("groupId"));
     const group = (state.data.groups || []).find((item) => item.id === groupId);
-    const recipients = group
-      ? state.data.people.filter((person) => Number(person.group_id) === groupId)
-      : state.data.people.filter((person) => person.id === Number(form.get("personId")));
-    if (!recipients.length) throw new Error(group ? "Il gruppo selezionato non ha iscritti." : "Seleziona una persona o un gruppo.");
+    const selectedIds = selectedSchedulePeople();
+    const recipients = selectedIds.length
+      ? state.data.people.filter((person) => selectedIds.includes(person.id))
+      : group
+        ? state.data.people.filter((person) => Number(person.group_id) === groupId)
+        : [];
+    if (!recipients.length) throw new Error(group ? "Il gruppo selezionato non ha iscritti." : "Seleziona una o piu persone.");
+    if (id && recipients.length !== 1) throw new Error("Per modificare un appuntamento gia creato seleziona una sola persona.");
     const payload = {
       trainer:form.get("trainer"),
       date:form.get("date") || state.scheduleDate,
       time:form.get("time"),
       notes:group ? `Gruppo: ${group.name}` : ""
     };
+    if (group && form.get("assignGroup")) {
+      await Promise.all(recipients.map((person) => request(`/api/people/${person.id}`, {
+        method:"PUT",
+        body:JSON.stringify({
+          name:person.name, color:person.color, birthDate:person.birth_date || "",
+          height:Number(person.height || 0), weight:Number(person.weight || 0),
+          phone:person.phone || "", groupId:group.id, notes:person.notes || ""
+        })
+      })));
+    }
     if (id) {
       await request(`/api/schedule/${id}`, {
         method:"PUT",
@@ -1336,7 +1398,7 @@ $("#schedule-form").addEventListener("submit", async (event) => {
     }
     resetScheduleForm();
     await load();
-    toast(id ? "Appuntamento aggiornato." : group ? `Appuntamenti creati per ${recipients.length} iscritti.` : "Appuntamento aggiunto in agenda.");
+    toast(id ? "Appuntamento aggiornato." : recipients.length > 1 ? `Appuntamenti creati per ${recipients.length} persone.` : "Appuntamento aggiunto in agenda.");
   } catch (error) {
     toast(error.message);
   } finally {
@@ -1671,8 +1733,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v51")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v51", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v52")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v52", "1");
     window.location.reload();
   });
 }

@@ -1,8 +1,8 @@
-const CACHE_NAME = "fittrack-shell-v41";
+const CACHE_NAME = "fittrack-shell-v42";
 const STATIC_ASSETS = [
   "/?pwa=51",
-  "/style.css?v=51",
-  "/app.js?v=51",
+  "/style.css?v=52",
+  "/app.js?v=52",
   "/manifest.webmanifest",
   "/brand/formae-banner.png",
   "/brand/formae-mark.png",

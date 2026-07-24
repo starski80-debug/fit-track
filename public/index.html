@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=52">
+  <link rel="stylesheet" href="/style.css?v=53">
 </head>
 <body>
   <aside class="sidebar">
@@ -92,9 +92,12 @@
         <form id="schedule-form" class="schedule-form">
           <input name="id" type="hidden">
           <label>Persone
-            <input id="schedule-people-search" type="search" placeholder="Cerca e seleziona una o piu persone">
+            <button type="button" id="schedule-people-toggle" class="people-toggle" aria-expanded="false">Seleziona persone</button>
           </label>
-          <div id="schedule-people-picker" class="people-picker"></div>
+          <div id="schedule-people-dropdown" class="people-dropdown hidden">
+            <input id="schedule-people-search" type="search" placeholder="Cerca e seleziona una o piu persone">
+            <div id="schedule-people-picker" class="people-picker"></div>
+          </div>
           <label>Gruppo
             <select name="groupId" id="schedule-group">
               <option value="0">Nessun gruppo</option>
@@ -455,7 +458,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=52"></script>
+  <script src="/app.js?v=53"></script>
 </body>
 </html>
 

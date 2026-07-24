@@ -53,17 +53,41 @@ h2 { margin-bottom:0; }
 .schedule-form .primary { min-height:46px; white-space:nowrap; }
 .schedule-actions { display:flex; align-items:center; gap:8px; }
 .schedule-actions .primary,.schedule-actions .secondary { min-height:46px; padding:11px 13px; white-space:nowrap; }
+.people-toggle {
+  width:100%;
+  min-height:46px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  border:1px solid #d9ddea;
+  border-radius:13px;
+  padding:12px 14px;
+  background:var(--surface);
+  color:var(--ink);
+  font:inherit;
+  font-weight:800;
+  text-align:left;
+}
+.people-toggle:after { content:"Apri"; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+.people-toggle[aria-expanded="true"]:after { content:"Chiudi"; }
+.people-toggle.has-selection { border-color:#ffcc05; box-shadow:0 0 0 2px rgba(255,204,5,.18); }
+.people-dropdown {
+  grid-column:1 / -1;
+  display:grid;
+  gap:10px;
+  padding:10px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  box-shadow:0 12px 30px rgba(8,11,18,.08);
+}
 .people-picker {
-  grid-column:1 / 3;
   display:grid;
   grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
   gap:8px;
   max-height:210px;
   overflow:auto;
-  padding:10px;
-  border:1px solid var(--line);
-  border-radius:14px;
-  background:var(--surface);
 }
 .people-picker-item {
   min-height:54px;

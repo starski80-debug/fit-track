@@ -1,6 +1,6 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"",
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false,
   workoutPersonId:null, groupDetailId:null
 };
 let deferredInstallPrompt = null;
@@ -267,6 +267,24 @@ function setScheduleSelectedPeople(ids = []) {
   $$("#schedule-people-picker input[type=checkbox]").forEach((input) => {
     input.checked = selected.has(Number(input.value));
   });
+  updateSchedulePeopleToggle();
+}
+
+function updateSchedulePeopleToggle() {
+  const ids = selectedSchedulePeople();
+  const names = ids.map((id) => state.data.people.find((person) => person.id === id)?.name).filter(Boolean);
+  const text = names.length === 0 ? "Clicca per vedere gli iscritti"
+    : names.length === 1 ? names[0]
+      : `${names.length} persone selezionate`;
+  $("#schedule-people-toggle").textContent = text;
+  $("#schedule-people-toggle").classList.toggle("has-selection", names.length > 0);
+}
+
+function setSchedulePeopleDropdown(open) {
+  state.schedulePeopleOpen = Boolean(open);
+  $("#schedule-people-dropdown").classList.toggle("hidden", !state.schedulePeopleOpen);
+  $("#schedule-people-toggle").setAttribute("aria-expanded", String(state.schedulePeopleOpen));
+  if (state.schedulePeopleOpen) $("#schedule-people-search").focus();
 }
 
 function renderSchedulePeoplePicker() {
@@ -287,6 +305,7 @@ function renderSchedulePeoplePicker() {
       <span><b>${escapeHtml(person.name)}</b>${group ? `<small>${escapeHtml(group.name)}</small>` : `<small>Senza gruppo</small>`}</span>
     </label>`;
   }).join("") || `<div class="empty people-picker-empty">Nessuna persona trovata.</div>`;
+  updateSchedulePeopleToggle();
 }
 
 function resetScheduleForm() {
@@ -296,6 +315,7 @@ function resetScheduleForm() {
   form.elements.groupId.value = "0";
   form.elements.date.value = state.scheduleDate;
   state.schedulePeopleSearch = "";
+  setSchedulePeopleDropdown(false);
   $("#schedule-people-search").value = "";
   setScheduleSelectedPeople([]);
   renderSchedulePeoplePicker();
@@ -1330,12 +1350,19 @@ $("#schedule-people-search").addEventListener("input", (event) => {
   state.schedulePeopleSearch = event.target.value;
   renderSchedulePeoplePicker();
 });
+$("#schedule-people-toggle").addEventListener("click", () => {
+  setSchedulePeopleDropdown(!state.schedulePeopleOpen);
+});
+$("#schedule-people-picker").addEventListener("change", (event) => {
+  if (event.target.matches("input[type=checkbox]")) updateSchedulePeopleToggle();
+});
 $("#schedule-group").addEventListener("change", (event) => {
   const groupId = Number(event.target.value);
   if (groupId) {
     const ids = state.data.people
       .filter((person) => Number(person.group_id || 0) === groupId)
       .map((person) => person.id);
+    setSchedulePeopleDropdown(true);
     renderSchedulePeoplePicker();
     setScheduleSelectedPeople(ids);
   } else {
@@ -1733,8 +1760,8 @@ if ("serviceWorker" in navigator) {
     });
   });
   navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (sessionStorage.getItem("fittrack-sw-reloaded-v52")) return;
-    sessionStorage.setItem("fittrack-sw-reloaded-v52", "1");
+    if (sessionStorage.getItem("fittrack-sw-reloaded-v53")) return;
+    sessionStorage.setItem("fittrack-sw-reloaded-v53", "1");
     window.location.reload();
   });
 }

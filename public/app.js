@@ -1,6 +1,6 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleTrainerFilter:"",
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleGroupsOpen:false, scheduleTrainerFilter:"",
   workoutPersonId:null, workoutPeopleSearch:"", groupDetailId:null
 };
 let deferredInstallPrompt = null;
@@ -219,7 +219,7 @@ function workoutCard(workout) {
   return `<article class="workout-card">
     <button type="button" class="avatar avatar-button" data-open-person-history="${workout.person_id}" style="background:${escapeHtml(workout.person_color)}" aria-label="Apri allenamenti di ${escapeHtml(workout.person_name)}">${escapeHtml(workout.person_name[0])}</button>
     <div class="workout-main">
-      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> Â· ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
+      <h3><button type="button" class="person-link" data-open-person-history="${workout.person_id}">${escapeHtml(workout.person_name)}</button> - ${bodyAreas.map(escapeHtml).join(" + ")}</h3>
       <div class="workout-meta">
         <span>${formatDate(workout.workout_date)}</span>
         <span>${exerciseCount} ${exerciseCount === 1 ? "esercizio" : "esercizi"}</span>
@@ -227,7 +227,7 @@ function workoutCard(workout) {
         ${workout.rpe !== undefined && workout.rpe !== null && workout.rpe !== "" ? `<span>RPE ${workout.rpe}${rpeLabels[workout.rpe] ? ` - ${escapeHtml(rpeLabels[workout.rpe])}` : ""}</span>` : ""}
       </div>
       <div class="exercise-tags">${workout.exercises.slice(0, 4).map((item) =>
-        `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} Â· ${escapeHtml(item.name)}</span>`
+        `<span class="tag area-tag" data-area="${escapeHtml(item.body_area)}">${areas[item.body_area] || "ALT"} - ${escapeHtml(item.name)}</span>`
       ).join("")}</div>
       ${workout.notes ? `<p class="workout-note">${escapeHtml(workout.notes)}</p>` : ""}
     </div>
@@ -268,7 +268,7 @@ function scheduleStatusSummary(items) {
     counts.confirmed ? `${counts.confirmed} conf.` : "",
     counts.scheduled ? `${counts.scheduled} att.` : "",
     counts.cancelled ? `${counts.cancelled} ann.` : ""
-  ].filter(Boolean).join(" Â· ");
+  ].filter(Boolean).join(" - ");
 }
 
 function trainerColor(name = "") {
@@ -284,7 +284,7 @@ function scheduleCard(item) {
     <div class="avatar" style="background:${escapeHtml(item.person_color)}">${escapeHtml(item.person_name[0] || "?")}</div>
     <div class="schedule-body">
       <h3>${escapeHtml(item.person_name)} <span class="schedule-status">${escapeHtml(scheduleStatusLabel(status))}</span></h3>
-      <p>${formatDate(item.scheduled_date)} Â· PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
+      <p>${formatDate(item.scheduled_date)} - PT ${escapeHtml(item.trainer || "Da assegnare")}</p>
       ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
     </div>
     <div class="schedule-item-actions">
@@ -308,6 +308,23 @@ function selectedScheduleGroupIds() {
 
 function setScheduleSelectedGroups(ids = []) {
   renderGroupCheckboxes($("#schedule-groups-picker"), ids, "scheduleGroupIds");
+  updateScheduleGroupsToggle();
+}
+
+function updateScheduleGroupsToggle() {
+  const ids = selectedScheduleGroupIds();
+  const names = ids.map((id) => groupById(id)?.name).filter(Boolean);
+  const text = names.length === 0 ? "Seleziona gruppi"
+    : names.length === 1 ? names[0]
+      : `${names.length} gruppi selezionati`;
+  $("#schedule-groups-toggle").textContent = text;
+  $("#schedule-groups-toggle").classList.toggle("has-selection", names.length > 0);
+}
+
+function setScheduleGroupsDropdown(open) {
+  state.scheduleGroupsOpen = Boolean(open);
+  $("#schedule-groups-dropdown").classList.toggle("hidden", !state.scheduleGroupsOpen);
+  $("#schedule-groups-toggle").setAttribute("aria-expanded", String(state.scheduleGroupsOpen));
 }
 
 function matchesScheduleTrainer(item) {
@@ -364,6 +381,7 @@ function resetScheduleForm() {
   form.reset();
   form.elements.id.value = "";
   setScheduleSelectedGroups([]);
+  setScheduleGroupsDropdown(false);
   form.elements.date.value = state.scheduleDate;
   state.schedulePeopleSearch = "";
   setSchedulePeopleDropdown(false);
@@ -404,6 +422,7 @@ function renderSchedule() {
   $("#schedule-trainer-filter").innerHTML = employeeOptionHtml().replace('<option value="">Seleziona</option>', '<option value="">Tutti</option>');
   $("#schedule-trainer-filter").value = currentTrainerFilter;
   setScheduleSelectedGroups(selectedScheduleGroupIds());
+  updateScheduleGroupsToggle();
   renderSchedulePeoplePicker();
   const filteredSchedule = schedule.filter(matchesScheduleTrainer);
   const selected = filteredSchedule.filter((item) => item.scheduled_date === state.scheduleDate);
@@ -760,7 +779,7 @@ function renderHistory() {
       const days = new Set(workouts.map((workout) => workout.workout_date)).size;
       return `<button class="history-person" data-history-person="${item.id}">
         <div class="avatar" style="background:${escapeHtml(item.color)}">${escapeHtml(item.name[0])}</div>
-        <div><h3>${escapeHtml(item.name)}</h3><p>${days} ${days === 1 ? "giorno" : "giorni"} Â· ${workouts.length} ${workouts.length === 1 ? "sessione" : "sessioni"}</p></div>
+        <div><h3>${escapeHtml(item.name)}</h3><p>${days} ${days === 1 ? "giorno" : "giorni"} - ${workouts.length} ${workouts.length === 1 ? "sessione" : "sessioni"}</p></div>
       </button>`;
     }).join("") || `<div class="empty">Nessuna persona inserita.</div>`;
     return;
@@ -855,7 +874,7 @@ function dayCard(day) {
         <strong>${escapeHtml(exercise.name)} <small class="tag area-tag" data-area="${escapeHtml(exercise.body_area)}">${escapeHtml(exercise.body_area)}</small></strong>
         <span>${exercise.sets} serie</span>
         <span>${exercise.reps} rip.</span>
-        <span>${formatNumber(exercise.weight)} kg Â· ${Number(exercise.seconds || 0)} sec</span>
+        <span>${formatNumber(exercise.weight)} kg - ${Number(exercise.seconds || 0)} sec</span>
         <span class="exercise-volume">${formatNumber(exerciseUnits(exercise))}</span>
       </div>`).join("")}
     </div>`;
@@ -878,7 +897,7 @@ function dayCard(day) {
       <div class="exercise-detail exercise-table-head"><span>Esercizio</span><span>Serie</span><span>Rip.</span><span>Peso / sec</span><span>Unita</span></div>
       ${exerciseRows}
     </div>
-    ${day.notes.length ? `<div class="day-notes">${day.notes.map(escapeHtml).join(" Â· ")}</div>` : ""}
+    ${day.notes.length ? `<div class="day-notes">${day.notes.map(escapeHtml).join(" - ")}</div>` : ""}
   </article>`;
 }
 
@@ -1412,12 +1431,16 @@ $("#schedule-people-search").addEventListener("input", (event) => {
 $("#schedule-people-toggle").addEventListener("click", () => {
   setSchedulePeopleDropdown(!state.schedulePeopleOpen);
 });
+$("#schedule-groups-toggle").addEventListener("click", () => {
+  setScheduleGroupsDropdown(!state.scheduleGroupsOpen);
+});
 $("#schedule-people-picker").addEventListener("change", (event) => {
   if (event.target.matches("input[type=checkbox]")) updateSchedulePeopleToggle();
 });
 $("#schedule-groups-picker").addEventListener("change", (event) => {
   if (!event.target.matches("input[type=checkbox]")) return;
   if (selectedScheduleGroupIds().length) setSchedulePeopleDropdown(true);
+  updateScheduleGroupsToggle();
   renderSchedulePeoplePicker();
 });
 $("#workout-people-search").addEventListener("input", (event) => {

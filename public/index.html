@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=56">
+  <link rel="stylesheet" href="/style.css?v=58">
 </head>
 <body>
   <aside class="sidebar">
@@ -39,7 +39,7 @@
         <p class="eyebrow" id="today"></p>
         <div class="page-title-row">
           <h1 id="page-title">Bentornato</h1>
-          <span class="build-version">Mobile 5</span>
+          <span class="build-version">Mobile 7</span>
         </div>
       </div>
       <div class="header-actions">
@@ -58,7 +58,7 @@
           <h2>Ogni allenamento<br>conta.</h2>
           <p>Registra i progressi di tutti, un esercizio alla volta.</p>
         </div>
-        <div class="hero-graphic"><div class="pulse">â†—</div></div>
+        <div class="hero-graphic"><div class="pulse">&nearr;</div></div>
       </div>
       <div class="stats" id="stats"></div>
       <section class="home-tabs" aria-label="Azioni principali">
@@ -104,8 +104,11 @@
             <div id="schedule-people-picker" class="people-picker"></div>
           </div>
           <label>Gruppi
-            <div id="schedule-groups-picker" class="group-picker"></div>
+            <button type="button" id="schedule-groups-toggle" class="people-toggle" aria-expanded="false">Seleziona gruppi</button>
           </label>
+          <div id="schedule-groups-dropdown" class="people-dropdown hidden">
+            <div id="schedule-groups-picker" class="group-picker"></div>
+          </div>
           <label class="checkline schedule-assign-group">
             <input name="assignGroup" type="checkbox" value="1">
             Assegna questi gruppi alle persone selezionate
@@ -202,7 +205,7 @@
     <section id="history-view" class="view hidden">
       <div class="section-head">
         <div><p class="eyebrow">DIARIO</p><h2 id="history-title">Scegli una persona</h2></div>
-        <button class="secondary hidden" id="history-back">â† Tutte le persone</button>
+        <button class="secondary hidden" id="history-back">&larr; Tutte le persone</button>
       </div>
       <p class="section-help" id="history-help">Clicca su un nome per vedere allenamenti, giornate e andamento.</p>
       <div id="history-people" class="history-people"></div>
@@ -405,7 +408,7 @@
           <li>Conferma con <strong>Aggiungi</strong>.</li>
         </ol>
       </div>
-      <p class="install-note">Lâ€™app userÃ  sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
+      <p class="install-note">L'app usa sempre il database sicuro su Railway. Per vedere o modificare i dati serve una connessione internet.</p>
     </div>
   </dialog>
 
@@ -472,7 +475,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=56"></script>
+  <script src="/app.js?v=58"></script>
 </body>
 </html>
 

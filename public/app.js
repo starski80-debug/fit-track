@@ -1,6 +1,6 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleGroupsOpen:false, schedulePeopleTrainersOpen:false, scheduleTrainerFilter:"",
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleGroupsOpen:false, schedulePeopleTrainersOpen:false,
   workoutPersonId:null, workoutPeopleSearch:"", groupDetailId:null
 };
 let deferredInstallPrompt = null;
@@ -373,10 +373,6 @@ function setSchedulePeopleTrainersDropdown(open) {
   $("#schedule-people-trainers-toggle").setAttribute("aria-expanded", String(state.schedulePeopleTrainersOpen));
 }
 
-function matchesScheduleTrainer(item) {
-  return !state.scheduleTrainerFilter || trainerKey(item.trainer) === trainerKey(state.scheduleTrainerFilter);
-}
-
 function trainerKey(name = "") {
   return String(name || "").trim().toLowerCase();
 }
@@ -483,7 +479,7 @@ function openScheduleEdit(item) {
 }
 
 function renderSchedule() {
-  const schedule = (state.data.schedule || []).filter(matchesScheduleTrainer);
+  const schedule = state.data.schedule || [];
   $("#schedule-date").value = state.scheduleDate;
   $("#schedule-form-date").value = state.scheduleDate;
   const employeeOptions = employeeOptionHtml();
@@ -492,21 +488,17 @@ function renderSchedule() {
     select.innerHTML = employeeOptions;
     select.value = current;
   });
-  const currentTrainerFilter = state.scheduleTrainerFilter;
-  $("#schedule-trainer-filter").innerHTML = employeeOptionHtml().replace('<option value="">Seleziona</option>', '<option value="">Tutti</option>');
-  $("#schedule-trainer-filter").value = currentTrainerFilter;
   setScheduleSelectedGroups(selectedScheduleGroupIds());
   setScheduleSelectedPeopleTrainers(selectedSchedulePeopleTrainerNames());
   updateScheduleGroupsToggle();
   updateSchedulePeopleTrainersToggle();
   renderSchedulePeoplePicker();
-  const filteredSchedule = schedule.filter(matchesScheduleTrainer);
-  const selected = filteredSchedule.filter((item) => item.scheduled_date === state.scheduleDate);
+  const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
   const upcoming = schedule
-    .filter((item) => matchesScheduleTrainer(item) && item.scheduled_date > state.scheduleDate)
+    .filter((item) => item.scheduled_date > state.scheduleDate)
     .slice(0, 6);
   const tomorrow = tomorrowDate();
-  const reminders = filteredSchedule.filter((item) => item.scheduled_date === tomorrow);
+  const reminders = schedule.filter((item) => item.scheduled_date === tomorrow);
   $("#schedule-list").innerHTML = `
     <div class="schedule-column calendar-detail">
       <h3>Dettaglio ${formatDate(state.scheduleDate)}</h3>
@@ -569,7 +561,7 @@ function renderCalendarGrid() {
 function openDayDialog(date) {
   state.scheduleDate = date;
   renderSchedule();
-  const items = (state.data.schedule || []).filter((item) => matchesScheduleTrainer(item) && item.scheduled_date === date);
+  const items = (state.data.schedule || []).filter((item) => item.scheduled_date === date);
   $("#day-dialog-title").textContent = formatDate(date);
   $("#day-dialog-list").innerHTML = items.map(scheduleCard).join("") ||
     `<div class="empty schedule-empty">Nessun appuntamento in questa giornata.</div>`;
@@ -1494,10 +1486,6 @@ $("#people-search").addEventListener("input", (event) => {
 });
 $("#schedule-date").addEventListener("change", (event) => {
   state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
-  renderSchedule();
-});
-$("#schedule-trainer-filter").addEventListener("change", (event) => {
-  state.scheduleTrainerFilter = event.target.value;
   renderSchedule();
 });
 $("#schedule-people-search").addEventListener("input", (event) => {

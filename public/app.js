@@ -328,7 +328,11 @@ function setScheduleGroupsDropdown(open) {
 }
 
 function matchesScheduleTrainer(item) {
-  return !state.scheduleTrainerFilter || item.trainer === state.scheduleTrainerFilter;
+  return !state.scheduleTrainerFilter || trainerKey(item.trainer) === trainerKey(state.scheduleTrainerFilter);
+}
+
+function trainerKey(name = "") {
+  return String(name || "").trim().toLowerCase();
 }
 
 function selectedScheduleTrainerName() {
@@ -338,19 +342,20 @@ function selectedScheduleTrainerName() {
 function personTrainerNames(personId) {
   const names = new Set();
   for (const item of state.data?.schedule || []) {
-    if (Number(item.person_id) === Number(personId) && item.trainer) names.add(item.trainer);
+    if (Number(item.person_id) === Number(personId) && trainerKey(item.trainer)) names.add(String(item.trainer).trim());
   }
   for (const workout of state.data?.workouts || []) {
     if (Number(workout.person_id) !== Number(personId)) continue;
     const name = workout.operator || workout.trainer || "";
-    if (name) names.add(name);
+    if (trainerKey(name)) names.add(String(name).trim());
   }
   return names;
 }
 
 function matchesPersonTrainer(person, trainerName, selectedPersonIds = new Set()) {
   if (!trainerName || selectedPersonIds.has(person.id)) return true;
-  return personTrainerNames(person.id).has(trainerName);
+  const selectedKey = trainerKey(trainerName);
+  return [...personTrainerNames(person.id)].some((name) => trainerKey(name) === selectedKey);
 }
 
 function setScheduleSelectedPeople(ids = []) {
@@ -390,10 +395,12 @@ function renderSchedulePeoplePicker() {
     return matchesSearch && matchesGroup && matchesPersonTrainer(person, trainerName, current);
   });
   $("#schedule-people-picker").innerHTML = people.map((person) => {
+    const trainers = [...personTrainerNames(person.id)].sort((left, right) => left.localeCompare(right, "it"));
+    const details = [personGroupText(person), trainers.length ? `PT: ${trainers.join(", ")}` : ""].filter(Boolean).join(" - ");
     return `<label class="people-picker-item">
       <input type="checkbox" value="${person.id}" ${current.has(person.id) ? "checked" : ""}>
       <span class="avatar mini-avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0] || "?")}</span>
-      <span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(personGroupText(person))}</small></span>
+      <span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(details)}</small></span>
     </label>`;
   }).join("") || `<div class="empty people-picker-empty">Nessuna persona trovata.</div>`;
   updateSchedulePeopleToggle();

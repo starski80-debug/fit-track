@@ -12,6 +12,29 @@ const defaultCatalog = {
   Altro: ["Mobilita", "Stretching", "Riscaldamento"]
 };
 
+function parseGroupIds(value, fallback = 0) {
+  let ids = [];
+  if (Array.isArray(value)) {
+    ids = value;
+  } else if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) ids = parsed;
+    } catch {}
+  }
+  if (!ids.length && Number(fallback) > 0) ids = [fallback];
+  return [...new Set(ids.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+}
+
+function groupIdsText(ids = [], fallback = 0) {
+  return JSON.stringify(parseGroupIds(ids, fallback));
+}
+
+function personWithGroupIds(person) {
+  const groupIds = parseGroupIds(person.group_ids, person.group_id);
+  return { ...person, group_id:Number(person.group_id || groupIds[0] || 0), group_ids:groupIds };
+}
+
 function createSqliteStore() {
   const { DatabaseSync } = require("node:sqlite");
   const dataDir = path.join(__dirname, "data");
@@ -102,6 +125,7 @@ function createSqliteStore() {
     ["birth_date", "TEXT NOT NULL DEFAULT ''"], ["height", "REAL NOT NULL DEFAULT 0"],
     ["weight", "REAL NOT NULL DEFAULT 0"], ["notes", "TEXT NOT NULL DEFAULT ''"],
     ["phone", "TEXT NOT NULL DEFAULT ''"], ["group_id", "INTEGER NOT NULL DEFAULT 0"],
+    ["group_ids", "TEXT NOT NULL DEFAULT '[]'"],
     ["client_pin_hash", "TEXT NOT NULL DEFAULT ''"]
   ]) {
     if (!columns.includes(name)) db.exec(`ALTER TABLE people ADD COLUMN ${name} ${definition}`);
@@ -168,19 +192,19 @@ function createSqliteStore() {
       `).all();
       const exercises = db.prepare("SELECT * FROM exercises WHERE workout_id = ? ORDER BY id");
       return {
-        people, groups, employees, catalog, schedule,
+        people:people.map(personWithGroupIds), groups, employees, catalog, schedule,
         templates:templates.map((item) => ({ ...item, rows:templateRows.all(item.id) })),
         workouts:workouts.map((item) => ({ ...item, exercises:exercises.all(item.id) }))
       };
     },
     async addPerson(body) {
       return Number(db.prepare(`
-        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id, client_pin_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "").lastInsertRowid);
+        INSERT INTO people (name, color, birth_date, height, weight, notes, phone, group_id, group_ids, client_pin_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, groupIdsText(body.groupIds, body.groupId), body.clientPinHash || "").lastInsertRowid);
     },
     async updatePerson(id, body) {
-      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=?, client_pin_hash=CASE WHEN ?='' THEN client_pin_hash ELSE ? END WHERE id=?`)
-        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "", body.clientPinHash || "", id).changes > 0;
+      return db.prepare(`UPDATE people SET name=?, color=?, birth_date=?, height=?, weight=?, notes=?, phone=?, group_id=?, group_ids=?, client_pin_hash=CASE WHEN ?='' THEN client_pin_hash ELSE ? END WHERE id=?`)
+        .run(body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, groupIdsText(body.groupIds, body.groupId), body.clientPinHash || "", body.clientPinHash || "", id).changes > 0;
     },
     async deletePerson(id) { return db.prepare("DELETE FROM people WHERE id=?").run(id).changes > 0; },
     async addGroup(body) {
@@ -191,6 +215,12 @@ function createSqliteStore() {
     },
     async deleteGroup(id) {
       db.prepare("UPDATE people SET group_id=0 WHERE group_id=?").run(id);
+      const people = db.prepare("SELECT id, group_id, group_ids FROM people").all();
+      const update = db.prepare("UPDATE people SET group_id=?, group_ids=? WHERE id=?");
+      for (const person of people) {
+        const groupIds = parseGroupIds(person.group_ids, person.group_id).filter((groupId) => groupId !== id);
+        update.run(Number(person.group_id) === id ? groupIds[0] || 0 : Number(person.group_id || 0), groupIdsText(groupIds), person.id);
+      }
       return db.prepare("DELETE FROM groups WHERE id=?").run(id).changes > 0;
     },
     async addEmployee(body) {
@@ -502,6 +532,7 @@ function createPostgresStore() {
         ALTER TABLE people ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS phone TEXT NOT NULL DEFAULT '';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS group_id BIGINT NOT NULL DEFAULT 0;
+        ALTER TABLE people ADD COLUMN IF NOT EXISTS group_ids TEXT NOT NULL DEFAULT '[]';
         ALTER TABLE people ADD COLUMN IF NOT EXISTS client_pin_hash TEXT NOT NULL DEFAULT '';
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS rpe INTEGER NOT NULL DEFAULT 0;
         ALTER TABLE workouts ADD COLUMN IF NOT EXISTS trainer TEXT NOT NULL DEFAULT '';
@@ -564,7 +595,7 @@ function createPostgresStore() {
         rowsByTemplate.get(key).push({ ...row, id:Number(row.id), template_id:Number(row.template_id) });
       }
       return {
-        people:people.rows.map((item) => ({ ...item, id:Number(item.id), group_id:Number(item.group_id || 0) })),
+        people:people.rows.map((item) => personWithGroupIds({ ...item, id:Number(item.id), group_id:Number(item.group_id || 0) })),
         groups:groups.rows.map((item) => ({ ...item, id:Number(item.id) })),
         employees:employees.rows.map((item) => ({ ...item, id:Number(item.id) })),
         catalog:catalog.rows.map((item) => ({ ...item, id:Number(item.id) })),
@@ -584,13 +615,13 @@ function createPostgresStore() {
     },
     async addPerson(body) {
       const result = await query(`
-        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id,client_pin_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id
-      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || ""]);
+        INSERT INTO people (name,color,birth_date,height,weight,notes,phone,group_id,group_ids,client_pin_hash) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id
+      `, [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, groupIdsText(body.groupIds, body.groupId), body.clientPinHash || ""]);
       return Number(result.rows[0].id);
     },
     async updatePerson(id, body) {
-      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8,client_pin_hash=CASE WHEN $9='' THEN client_pin_hash ELSE $9 END WHERE id=$10`,
-        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, body.clientPinHash || "", id]);
+      const result = await query(`UPDATE people SET name=$1,color=$2,birth_date=$3,height=$4,weight=$5,notes=$6,phone=$7,group_id=$8,group_ids=$9,client_pin_hash=CASE WHEN $10='' THEN client_pin_hash ELSE $10 END WHERE id=$11`,
+        [body.name, body.color, body.birthDate, body.height, body.weight, body.notes, body.phone, body.groupId, groupIdsText(body.groupIds, body.groupId), body.clientPinHash || "", id]);
       return result.rowCount > 0;
     },
     async deletePerson(id) {
@@ -607,6 +638,12 @@ function createPostgresStore() {
     },
     async deleteGroup(id) {
       await query("UPDATE people SET group_id=0 WHERE group_id=$1", [id]);
+      const people = await query("SELECT id, group_id, group_ids FROM people");
+      await Promise.all(people.rows.map((person) => {
+        const groupIds = parseGroupIds(person.group_ids, person.group_id).filter((groupId) => groupId !== id);
+        const primaryGroupId = Number(person.group_id) === id ? groupIds[0] || 0 : Number(person.group_id || 0);
+        return query("UPDATE people SET group_id=$1, group_ids=$2 WHERE id=$3", [primaryGroupId, groupIdsText(groupIds), person.id]);
+      }));
       const result = await query("DELETE FROM groups WHERE id=$1", [id]);
       return result.rowCount > 0;
     },

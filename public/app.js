@@ -1,7 +1,7 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false,
-  workoutPersonId:null, groupDetailId:null
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleTrainerFilter:"",
+  workoutPersonId:null, workoutPeopleSearch:"", groupDetailId:null
 };
 let deferredInstallPrompt = null;
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -63,6 +63,45 @@ function bodyAreaList() {
 
 function groupById(id) {
   return (state.data?.groups || []).find((group) => group.id === Number(id)) || null;
+}
+
+function personGroupIds(person = {}) {
+  const ids = Array.isArray(person.group_ids) ? person.group_ids : [];
+  const fallback = Number(person.group_id || 0);
+  const normalized = ids.map(Number).filter(Boolean);
+  if (!normalized.length && fallback) normalized.push(fallback);
+  return [...new Set(normalized)];
+}
+
+function personGroups(person = {}) {
+  return personGroupIds(person).map(groupById).filter(Boolean);
+}
+
+function personGroupText(person = {}) {
+  const names = personGroups(person).map((group) => group.name);
+  return names.length ? names.join(", ") : "Senza gruppo";
+}
+
+function hasAnyPersonGroup(person, groupIds = []) {
+  if (!groupIds.length) return true;
+  const current = personGroupIds(person);
+  return groupIds.some((id) => current.includes(Number(id)));
+}
+
+function checkedValues(selector) {
+  return $$(selector).map((input) => Number(input.value)).filter(Boolean);
+}
+
+function renderGroupCheckboxes(container, selectedIds = [], inputName = "groupIds") {
+  const selected = new Set(selectedIds.map(Number));
+  const groups = state.data?.groups || [];
+  container.innerHTML = groups.map((group) => `
+    <label class="group-picker-item">
+      <input type="checkbox" name="${escapeHtml(inputName)}" value="${group.id}" ${selected.has(group.id) ? "checked" : ""}>
+      <span class="group-picker-dot" style="background:${escapeHtml(group.color)}"></span>
+      <span>${escapeHtml(group.name)}</span>
+    </label>
+  `).join("") || `<div class="empty group-picker-empty">Nessun gruppo creato.</div>`;
 }
 
 function recoveryBodyAreaName(areaNames) {
@@ -263,6 +302,18 @@ function selectedSchedulePeople() {
     .filter(Boolean);
 }
 
+function selectedScheduleGroupIds() {
+  return checkedValues("#schedule-groups-picker input[type=checkbox]:checked");
+}
+
+function setScheduleSelectedGroups(ids = []) {
+  renderGroupCheckboxes($("#schedule-groups-picker"), ids, "scheduleGroupIds");
+}
+
+function matchesScheduleTrainer(item) {
+  return !state.scheduleTrainerFilter || item.trainer === state.scheduleTrainerFilter;
+}
+
 function setScheduleSelectedPeople(ids = []) {
   const selected = new Set(ids.map(Number));
   $$("#schedule-people-picker input[type=checkbox]").forEach((input) => {
@@ -290,20 +341,19 @@ function setSchedulePeopleDropdown(open) {
 
 function renderSchedulePeoplePicker() {
   const current = new Set(selectedSchedulePeople());
-  const groupId = Number($("#schedule-group")?.value || 0);
+  const groupIds = selectedScheduleGroupIds();
   const search = state.schedulePeopleSearch.trim().toLowerCase();
   const people = (state.data.people || []).filter((person) => {
-    const matchesSearch = !search || [person.name, person.phone, person.notes, groupById(person.group_id)?.name]
+    const matchesSearch = !search || [person.name, person.phone, person.notes, personGroupText(person)]
       .some((value) => String(value || "").toLowerCase().includes(search));
-    const matchesGroup = !groupId || Number(person.group_id || 0) === groupId || current.has(person.id);
+    const matchesGroup = !groupIds.length || hasAnyPersonGroup(person, groupIds) || current.has(person.id);
     return matchesSearch && matchesGroup;
   });
   $("#schedule-people-picker").innerHTML = people.map((person) => {
-    const group = groupById(person.group_id);
     return `<label class="people-picker-item">
       <input type="checkbox" value="${person.id}" ${current.has(person.id) ? "checked" : ""}>
       <span class="avatar mini-avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0] || "?")}</span>
-      <span><b>${escapeHtml(person.name)}</b>${group ? `<small>${escapeHtml(group.name)}</small>` : `<small>Senza gruppo</small>`}</span>
+      <span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(personGroupText(person))}</small></span>
     </label>`;
   }).join("") || `<div class="empty people-picker-empty">Nessuna persona trovata.</div>`;
   updateSchedulePeopleToggle();
@@ -313,7 +363,7 @@ function resetScheduleForm() {
   const form = $("#schedule-form");
   form.reset();
   form.elements.id.value = "";
-  form.elements.groupId.value = "0";
+  setScheduleSelectedGroups([]);
   form.elements.date.value = state.scheduleDate;
   state.schedulePeopleSearch = "";
   setSchedulePeopleDropdown(false);
@@ -330,7 +380,7 @@ function openScheduleEdit(item) {
   $("#schedule-date").value = state.scheduleDate;
   renderSchedule();
   form.elements.id.value = item.id;
-  form.elements.groupId.value = "0";
+  setScheduleSelectedGroups([]);
   setScheduleSelectedPeople([item.person_id]);
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
@@ -341,7 +391,7 @@ function openScheduleEdit(item) {
 }
 
 function renderSchedule() {
-  const schedule = state.data.schedule || [];
+  const schedule = (state.data.schedule || []).filter(matchesScheduleTrainer);
   $("#schedule-date").value = state.scheduleDate;
   $("#schedule-form-date").value = state.scheduleDate;
   const employeeOptions = employeeOptionHtml();
@@ -350,19 +400,18 @@ function renderSchedule() {
     select.innerHTML = employeeOptions;
     select.value = current;
   });
-  const currentGroup = $("#schedule-group").value;
-  $("#schedule-group").innerHTML = [
-    `<option value="0">Nessun gruppo</option>`,
-    ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
-  ].join("");
-  $("#schedule-group").value = currentGroup || "0";
+  const currentTrainerFilter = state.scheduleTrainerFilter;
+  $("#schedule-trainer-filter").innerHTML = employeeOptionHtml().replace('<option value="">Seleziona</option>', '<option value="">Tutti</option>');
+  $("#schedule-trainer-filter").value = currentTrainerFilter;
+  setScheduleSelectedGroups(selectedScheduleGroupIds());
   renderSchedulePeoplePicker();
-  const selected = schedule.filter((item) => item.scheduled_date === state.scheduleDate);
+  const filteredSchedule = schedule.filter(matchesScheduleTrainer);
+  const selected = filteredSchedule.filter((item) => item.scheduled_date === state.scheduleDate);
   const upcoming = schedule
-    .filter((item) => item.scheduled_date > state.scheduleDate)
+    .filter((item) => matchesScheduleTrainer(item) && item.scheduled_date > state.scheduleDate)
     .slice(0, 6);
   const tomorrow = tomorrowDate();
-  const reminders = schedule.filter((item) => item.scheduled_date === tomorrow);
+  const reminders = filteredSchedule.filter((item) => item.scheduled_date === tomorrow);
   $("#schedule-list").innerHTML = `
     <div class="schedule-column calendar-detail">
       <h3>Dettaglio ${formatDate(state.scheduleDate)}</h3>
@@ -425,7 +474,7 @@ function renderCalendarGrid() {
 function openDayDialog(date) {
   state.scheduleDate = date;
   renderSchedule();
-  const items = (state.data.schedule || []).filter((item) => item.scheduled_date === date);
+  const items = (state.data.schedule || []).filter((item) => matchesScheduleTrainer(item) && item.scheduled_date === date);
   $("#day-dialog-title").textContent = formatDate(date);
   $("#day-dialog-list").innerHTML = items.map(scheduleCard).join("") ||
     `<div class="empty schedule-empty">Nessun appuntamento in questa giornata.</div>`;
@@ -462,7 +511,7 @@ function render() {
   const peopleFilter = state.peopleSearch.trim().toLowerCase();
   const visiblePeople = people.filter((person) => [
     person.name,
-    groupById(person.group_id)?.name,
+    personGroupText(person),
     person.birth_date,
     person.height,
     person.weight,
@@ -471,9 +520,8 @@ function render() {
   ].some((value) => String(value || "").toLowerCase().includes(peopleFilter)));
   $("#people-grid").innerHTML = visiblePeople.map((person) => {
     const personWorkouts = workouts.filter((item) => item.person_id === person.id);
-    const group = groupById(person.group_id);
     const details = [
-      group ? `Gruppo: ${group.name}` : "",
+      personGroupIds(person).length ? `Gruppi: ${personGroupText(person)}` : "",
       person.birth_date ? `Nato/a: ${formatDate(person.birth_date)}` : "",
       person.height ? `${person.height} cm` : "",
       person.weight ? `${person.weight} kg` : "",
@@ -493,10 +541,7 @@ function render() {
   ).join("");
   $("#person-select").innerHTML = personOptions;
   $("#template-person").innerHTML = [`<option value="0">Nessuna persona</option>`, personOptions].join("");
-  $("#person-group-select").innerHTML = [
-    `<option value="0">Nessun gruppo</option>`,
-    ...(state.data.groups || []).map((group) => `<option value="${group.id}">${escapeHtml(group.name)}</option>`)
-  ].join("");
+  renderGroupCheckboxes($("#person-groups-picker"), [], "personGroupIds");
   $("#catalog-filter").innerHTML = [
     `<option value="">Tutte le zone</option>`,
     ...bodyAreaList().map((area) => `<option value="${escapeHtml(area)}">${escapeHtml(area)}</option>`)
@@ -509,16 +554,19 @@ function renderWorkoutsView() {
   const people = state.data.people || [];
   const workouts = state.data.workouts || [];
   const person = people.find((item) => item.id === Number(state.workoutPersonId));
+  $("#workout-people-search-wrap").classList.toggle("hidden", Boolean(person));
   if (!person) {
+    const search = state.workoutPeopleSearch.trim().toLowerCase();
+    const visiblePeople = people.filter((item) => !search || item.name.toLowerCase().includes(search));
     $("#workout-list").innerHTML = `<div class="workout-people-grid">
-      ${people.map((item) => {
+      ${visiblePeople.map((item) => {
         const count = workouts.filter((workout) => workout.person_id === item.id).length;
         return `<button type="button" class="person-card workout-person-card" data-workout-person="${item.id}">
           <div class="avatar" style="background:${escapeHtml(item.color)}">${escapeHtml(item.name[0])}</div>
           <h3>${escapeHtml(item.name)}</h3>
           <p>${count} ${count === 1 ? "allenamento" : "allenamenti"}</p>
         </button>`;
-      }).join("") || `<div class="empty">Nessuna persona inserita.</div>`}
+      }).join("") || `<div class="empty">${people.length ? "Nessuna persona trovata." : "Nessuna persona inserita."}</div>`}
     </div>`;
     return;
   }
@@ -539,7 +587,7 @@ function renderGroups() {
   const selected = groups.find((group) => group.id === Number(state.groupDetailId));
   $("#group-detail").classList.toggle("hidden", !selected);
   if (selected) {
-    const members = people.filter((person) => Number(person.group_id || 0) === selected.id);
+    const members = people.filter((person) => personGroupIds(person).includes(selected.id));
     $("#group-detail").innerHTML = `
       <div class="section-head compact-head">
         <div><p class="eyebrow">GRUPPO</p><h2>${escapeHtml(selected.name)}</h2></div>
@@ -561,7 +609,7 @@ function renderGroups() {
       </div>`;
   }
   $("#groups-grid").innerHTML = groups.map((group) => {
-    const members = people.filter((person) => Number(person.group_id || 0) === group.id);
+    const members = people.filter((person) => personGroupIds(person).includes(group.id));
     return `<article class="group-card" data-open-group="${group.id}">
       <div class="group-card-head">
         <span class="group-color" style="background:${escapeHtml(group.color)}"></span>
@@ -913,6 +961,10 @@ async function load() {
   state.data = await request("/api/dashboard");
   if (!Array.isArray(state.data.groups)) state.data.groups = [];
   if (!Array.isArray(state.data.employees)) state.data.employees = [];
+  for (const person of state.data.people || []) {
+    person.group_ids = personGroupIds(person);
+    person.group_id = person.group_ids[0] || Number(person.group_id || 0);
+  }
   if (!state.data.employees.length) {
     state.data.employees = [
       { id:"default-leonardo", name:"Leonardo", color:"#ffcc05", role:"Personal trainer" },
@@ -1055,7 +1107,8 @@ function openPerson(person = null) {
   form.elements.weight.value = person?.weight || "";
   form.elements.phone.value = person?.phone || "";
   form.elements.clientPin.value = "";
-  form.elements.groupId.value = person?.group_id || 0;
+  renderGroupCheckboxes($("#person-groups-picker"), personGroupIds(person || {}), "personGroupIds");
+  form.elements.groupId.value = personGroupIds(person || {})[0] || 0;
   form.elements.notes.value = person?.notes || "";
   $("#person-dialog-title").textContent = person ? "Modifica persona" : "Aggiungi persona";
   $("#delete-person").classList.toggle("hidden", !person);
@@ -1348,6 +1401,10 @@ $("#schedule-date").addEventListener("change", (event) => {
   state.scheduleDate = event.target.value || new Date().toISOString().slice(0, 10);
   renderSchedule();
 });
+$("#schedule-trainer-filter").addEventListener("change", (event) => {
+  state.scheduleTrainerFilter = event.target.value;
+  renderSchedule();
+});
 $("#schedule-people-search").addEventListener("input", (event) => {
   state.schedulePeopleSearch = event.target.value;
   renderSchedulePeoplePicker();
@@ -1358,14 +1415,14 @@ $("#schedule-people-toggle").addEventListener("click", () => {
 $("#schedule-people-picker").addEventListener("change", (event) => {
   if (event.target.matches("input[type=checkbox]")) updateSchedulePeopleToggle();
 });
-$("#schedule-group").addEventListener("change", (event) => {
-  const groupId = Number(event.target.value);
-  if (groupId) {
-    setSchedulePeopleDropdown(true);
-    renderSchedulePeoplePicker();
-  } else {
-    renderSchedulePeoplePicker();
-  }
+$("#schedule-groups-picker").addEventListener("change", (event) => {
+  if (!event.target.matches("input[type=checkbox]")) return;
+  if (selectedScheduleGroupIds().length) setSchedulePeopleDropdown(true);
+  renderSchedulePeoplePicker();
+});
+$("#workout-people-search").addEventListener("input", (event) => {
+  state.workoutPeopleSearch = event.target.value;
+  renderWorkoutsView();
 });
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
 $("#group-cancel-edit").addEventListener("click", resetGroupForm);
@@ -1384,8 +1441,8 @@ $("#schedule-form").addEventListener("submit", async (event) => {
   const form = new FormData(formElement);
   try {
     const id = form.get("id");
-    const groupId = Number(form.get("groupId"));
-    const group = (state.data.groups || []).find((item) => item.id === groupId);
+    const groupIds = selectedScheduleGroupIds();
+    const selectedGroups = (state.data.groups || []).filter((item) => groupIds.includes(item.id));
     const selectedIds = selectedSchedulePeople();
     const recipients = state.data.people.filter((person) => selectedIds.includes(person.id));
     if (!recipients.length) throw new Error("Seleziona una o piu persone dalla lista.");
@@ -1394,15 +1451,16 @@ $("#schedule-form").addEventListener("submit", async (event) => {
       trainer:form.get("trainer"),
       date:form.get("date") || state.scheduleDate,
       time:form.get("time"),
-      notes:group ? `Gruppo: ${group.name}` : ""
+      notes:selectedGroups.length ? `Gruppi: ${selectedGroups.map((group) => group.name).join(", ")}` : ""
     };
-    if (group && form.get("assignGroup")) {
+    if (selectedGroups.length && form.get("assignGroup")) {
       await Promise.all(recipients.map((person) => request(`/api/people/${person.id}`, {
         method:"PUT",
         body:JSON.stringify({
+          groupIds:[...new Set([...personGroupIds(person), ...groupIds])],
           name:person.name, color:person.color, birthDate:person.birth_date || "",
           height:Number(person.height || 0), weight:Number(person.weight || 0),
-          phone:person.phone || "", groupId:group.id, notes:person.notes || ""
+          phone:person.phone || "", groupId:personGroupIds(person)[0] || groupIds[0] || 0, notes:person.notes || ""
         })
       })));
     }
@@ -1478,12 +1536,14 @@ $("#person-form").addEventListener("submit", async (event) => {
   const form = new FormData(formElement);
   try {
     const id = form.get("id");
+    const groupIds = checkedValues("#person-groups-picker input[type=checkbox]:checked");
+    formElement.elements.groupId.value = groupIds[0] || 0;
     await request(id ? `/api/people/${id}` : "/api/people", {
       method:id ? "PUT" : "POST",
       body:JSON.stringify({
         name:form.get("name"), color:form.get("color"), birthDate:form.get("birthDate"),
         height:form.get("height"), weight:form.get("weight"), phone:form.get("phone"), clientPin:form.get("clientPin"),
-        groupId:Number(form.get("groupId")), notes:form.get("notes")
+        groupId:groupIds[0] || 0, groupIds, notes:form.get("notes")
       })
     });
     $("#person-dialog").close();

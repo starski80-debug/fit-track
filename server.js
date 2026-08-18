@@ -130,12 +130,20 @@ function positiveInteger(value) {
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
+function positiveIntegerList(value) {
+  const list = Array.isArray(value) ? value : String(value || "").split(",");
+  return [...new Set(list.map(positiveInteger).filter(Boolean))].slice(0, 20);
+}
+
 function validDate(value) {
   const date = String(value || "");
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
 }
 
 function normalizePerson(body) {
+  const groupIds = positiveIntegerList(body.groupIds);
+  const groupId = groupIds[0] || positiveInteger(body.groupId);
+  if (!groupIds.length && groupId) groupIds.push(groupId);
   return {
     name:cleanText(body.name, 100),
     color:/^#[0-9a-f]{6}$/i.test(body.color) ? body.color : "#6c63ff",
@@ -144,7 +152,8 @@ function normalizePerson(body) {
     weight:finiteNumber(body.weight, 0, 1_000),
     notes:cleanText(body.notes, 2_000),
     phone:cleanPhone(body.phone),
-    groupId:positiveInteger(body.groupId),
+    groupId,
+    groupIds,
     clientPin:/^\d{4,10}$/.test(String(body.clientPin || "")) ? String(body.clientPin) : ""
   };
 }
@@ -618,6 +627,7 @@ async function api(req, res, url) {
       const updated = {
         name:person.name, color:person.color, birthDate:person.birth_date, height:person.height,
         weight:person.weight, notes:person.notes, phone:person.phone, groupId:person.group_id,
+        groupIds:person.group_ids || [],
         clientPinHash:clientPinHash(pin)
       };
       if (!await store.updatePerson(person.id, updated)) return json(res, 404, { error:"Profilo non trovato." });

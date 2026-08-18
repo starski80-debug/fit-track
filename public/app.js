@@ -331,6 +331,28 @@ function matchesScheduleTrainer(item) {
   return !state.scheduleTrainerFilter || item.trainer === state.scheduleTrainerFilter;
 }
 
+function selectedScheduleTrainerName() {
+  return state.scheduleTrainerFilter || $("#schedule-form")?.elements?.trainer?.value || "";
+}
+
+function personTrainerNames(personId) {
+  const names = new Set();
+  for (const item of state.data?.schedule || []) {
+    if (Number(item.person_id) === Number(personId) && item.trainer) names.add(item.trainer);
+  }
+  for (const workout of state.data?.workouts || []) {
+    if (Number(workout.person_id) !== Number(personId)) continue;
+    const name = workout.operator || workout.trainer || "";
+    if (name) names.add(name);
+  }
+  return names;
+}
+
+function matchesPersonTrainer(person, trainerName, selectedPersonIds = new Set()) {
+  if (!trainerName || selectedPersonIds.has(person.id)) return true;
+  return personTrainerNames(person.id).has(trainerName);
+}
+
 function setScheduleSelectedPeople(ids = []) {
   const selected = new Set(ids.map(Number));
   $$("#schedule-people-picker input[type=checkbox]").forEach((input) => {
@@ -359,12 +381,13 @@ function setSchedulePeopleDropdown(open) {
 function renderSchedulePeoplePicker() {
   const current = new Set(selectedSchedulePeople());
   const groupIds = selectedScheduleGroupIds();
+  const trainerName = selectedScheduleTrainerName();
   const search = state.schedulePeopleSearch.trim().toLowerCase();
   const people = (state.data.people || []).filter((person) => {
     const matchesSearch = !search || [person.name, person.phone, person.notes, personGroupText(person)]
       .some((value) => String(value || "").toLowerCase().includes(search));
     const matchesGroup = !groupIds.length || hasAnyPersonGroup(person, groupIds) || current.has(person.id);
-    return matchesSearch && matchesGroup;
+    return matchesSearch && matchesGroup && matchesPersonTrainer(person, trainerName, current);
   });
   $("#schedule-people-picker").innerHTML = people.map((person) => {
     return `<label class="people-picker-item">
@@ -1424,6 +1447,9 @@ $("#schedule-trainer-filter").addEventListener("change", (event) => {
   state.scheduleTrainerFilter = event.target.value;
   renderSchedule();
 });
+$("#schedule-form").addEventListener("change", (event) => {
+  if (event.target.matches("select[name=trainer]")) renderSchedulePeoplePicker();
+});
 $("#schedule-people-search").addEventListener("input", (event) => {
   state.schedulePeopleSearch = event.target.value;
   renderSchedulePeoplePicker();
@@ -1476,17 +1502,6 @@ $("#schedule-form").addEventListener("submit", async (event) => {
       time:form.get("time"),
       notes:selectedGroups.length ? `Gruppi: ${selectedGroups.map((group) => group.name).join(", ")}` : ""
     };
-    if (selectedGroups.length && form.get("assignGroup")) {
-      await Promise.all(recipients.map((person) => request(`/api/people/${person.id}`, {
-        method:"PUT",
-        body:JSON.stringify({
-          groupIds:[...new Set([...personGroupIds(person), ...groupIds])],
-          name:person.name, color:person.color, birthDate:person.birth_date || "",
-          height:Number(person.height || 0), weight:Number(person.weight || 0),
-          phone:person.phone || "", groupId:personGroupIds(person)[0] || groupIds[0] || 0, notes:person.notes || ""
-        })
-      })));
-    }
     if (id) {
       await request(`/api/schedule/${id}`, {
         method:"PUT",

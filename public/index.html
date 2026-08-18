@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=58">
+  <link rel="stylesheet" href="/style.css?v=59">
 </head>
 <body>
   <aside class="sidebar">
@@ -39,7 +39,7 @@
         <p class="eyebrow" id="today"></p>
         <div class="page-title-row">
           <h1 id="page-title">Bentornato</h1>
-          <span class="build-version">Mobile 7</span>
+          <span class="build-version">Mobile 8</span>
         </div>
       </div>
       <div class="header-actions">
@@ -96,6 +96,7 @@
         <div id="calendar-grid" class="calendar-grid"></div>
         <form id="schedule-form" class="schedule-form">
           <input name="id" type="hidden">
+          <input name="assignGroup" type="hidden" value="">
           <label>Persone
             <button type="button" id="schedule-people-toggle" class="people-toggle" aria-expanded="false">Seleziona persone</button>
           </label>
@@ -103,16 +104,12 @@
             <input id="schedule-people-search" type="search" placeholder="Cerca e seleziona una o piu persone">
             <div id="schedule-people-picker" class="people-picker"></div>
           </div>
-          <label>Gruppi
+          <label>Filtra gruppi
             <button type="button" id="schedule-groups-toggle" class="people-toggle" aria-expanded="false">Seleziona gruppi</button>
           </label>
           <div id="schedule-groups-dropdown" class="people-dropdown hidden">
             <div id="schedule-groups-picker" class="group-picker"></div>
           </div>
-          <label class="checkline schedule-assign-group">
-            <input name="assignGroup" type="checkbox" value="1">
-            Assegna questi gruppi alle persone selezionate
-          </label>
           <label>Personal trainer
             <select name="trainer" required>
               <option value="">Seleziona</option>
@@ -475,7 +472,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=58"></script>
+  <script src="/app.js?v=59"></script>
 </body>
 </html>
 

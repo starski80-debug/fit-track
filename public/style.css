@@ -107,8 +107,6 @@ h2 { margin-bottom:0; }
 .people-picker-item:has(input:checked) { border-color:#ffcc05; box-shadow:0 0 0 2px rgba(255,204,5,.22); }
 .mini-avatar { width:34px; height:34px; border-radius:11px; font-size:13px; }
 .people-picker-empty { grid-column:1 / -1; margin:0; }
-.schedule-assign-group { align-self:center; display:flex; gap:9px; align-items:center; font-weight:800; }
-.schedule-assign-group input { width:18px; height:18px; margin:0; accent-color:#ffcc05; }
 .workout-notes-field { grid-column:1 / -1; }
 .workout-notes-field textarea {
   width:100%;

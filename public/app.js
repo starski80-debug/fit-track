@@ -349,18 +349,22 @@ function selectedSchedulePeopleTrainerNames() {
   return checkedTextValues("#schedule-people-trainers-picker input[type=checkbox]:checked");
 }
 
+function selectedScheduleAppointmentTrainer() {
+  return selectedSchedulePeopleTrainerNames()[0] || "";
+}
+
 function setScheduleSelectedPeopleTrainers(names = []) {
-  renderTrainerCheckboxes($("#schedule-people-trainers-picker"), names, "schedulePeopleTrainerFilters");
+  renderTrainerCheckboxes($("#schedule-people-trainers-picker"), names.slice(0, 1), "schedulePeopleTrainerFilters");
   updateSchedulePeopleTrainersToggle();
 }
 
 function updateSchedulePeopleTrainersToggle() {
   const names = selectedSchedulePeopleTrainerNames();
-  const text = names.length === 0 ? "Seleziona PT"
-    : names.length === 1 ? names[0]
-      : `${names.length} PT selezionati`;
+  const text = names.length === 0 ? "Seleziona PT" : names[0];
   $("#schedule-people-trainers-toggle").textContent = text;
   $("#schedule-people-trainers-toggle").classList.toggle("has-selection", names.length > 0);
+  const trainerInput = $("#schedule-form")?.elements?.trainer;
+  if (trainerInput) trainerInput.value = selectedScheduleAppointmentTrainer();
 }
 
 function setSchedulePeopleTrainersDropdown(open) {
@@ -468,6 +472,7 @@ function openScheduleEdit(item) {
   renderSchedule();
   form.elements.id.value = item.id;
   setScheduleSelectedGroups([]);
+  setScheduleSelectedPeopleTrainers(item.trainer ? [item.trainer] : []);
   setScheduleSelectedPeople([item.person_id]);
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
@@ -482,7 +487,7 @@ function renderSchedule() {
   $("#schedule-date").value = state.scheduleDate;
   $("#schedule-form-date").value = state.scheduleDate;
   const employeeOptions = employeeOptionHtml();
-  $$("select[name=trainer], select[name=operator]").forEach((select) => {
+  $$("select[name=operator]").forEach((select) => {
     const current = select.value;
     select.innerHTML = employeeOptions;
     select.value = current;
@@ -1519,6 +1524,11 @@ $("#schedule-groups-picker").addEventListener("change", (event) => {
 });
 $("#schedule-people-trainers-picker").addEventListener("change", (event) => {
   if (!event.target.matches("input[type=checkbox]")) return;
+  if (event.target.checked) {
+    $$("#schedule-people-trainers-picker input[type=checkbox]").forEach((input) => {
+      if (input !== event.target) input.checked = false;
+    });
+  }
   if (selectedSchedulePeopleTrainerNames().length) setSchedulePeopleDropdown(true);
   updateSchedulePeopleTrainersToggle();
   renderSchedulePeoplePicker();
@@ -1548,10 +1558,12 @@ $("#schedule-form").addEventListener("submit", async (event) => {
     const selectedGroups = (state.data.groups || []).filter((item) => groupIds.includes(item.id));
     const selectedIds = selectedSchedulePeople();
     const recipients = state.data.people.filter((person) => selectedIds.includes(person.id));
+    const appointmentTrainer = selectedScheduleAppointmentTrainer();
     if (!recipients.length) throw new Error("Seleziona una o piu persone dalla lista.");
+    if (!appointmentTrainer) throw new Error("Seleziona un personal trainer.");
     if (id && recipients.length !== 1) throw new Error("Per modificare un appuntamento gia creato seleziona una sola persona.");
     const payload = {
-      trainer:form.get("trainer"),
+      trainer:appointmentTrainer,
       date:form.get("date") || state.scheduleDate,
       time:form.get("time"),
       notes:selectedGroups.length ? `Gruppi: ${selectedGroups.map((group) => group.name).join(", ")}` : ""

@@ -1,6 +1,6 @@
 ﻿const state = {
   data: null, view: "dashboard", historyPersonId: null, peopleSearch: "",
-  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleGroupsOpen:false, scheduleTrainerFilter:"",
+  scheduleDate:new Date().toISOString().slice(0, 10), schedulePeopleSearch:"", schedulePeopleOpen:false, scheduleGroupsOpen:false, schedulePeopleTrainersOpen:false, scheduleTrainerFilter:"",
   workoutPersonId:null, workoutPeopleSearch:"", groupDetailId:null
 };
 let deferredInstallPrompt = null;
@@ -92,6 +92,10 @@ function checkedValues(selector) {
   return $$(selector).map((input) => Number(input.value)).filter(Boolean);
 }
 
+function checkedTextValues(selector) {
+  return $$(selector).map((input) => String(input.value || "").trim()).filter(Boolean);
+}
+
 function renderGroupCheckboxes(container, selectedIds = [], inputName = "groupIds") {
   const selected = new Set(selectedIds.map(Number));
   const groups = state.data?.groups || [];
@@ -102,6 +106,20 @@ function renderGroupCheckboxes(container, selectedIds = [], inputName = "groupId
       <span>${escapeHtml(group.name)}</span>
     </label>
   `).join("") || `<div class="empty group-picker-empty">Nessun gruppo creato.</div>`;
+}
+
+function renderTrainerCheckboxes(container, selectedNames = [], inputName = "trainerFilters") {
+  const selected = new Set(selectedNames.map(trainerKey));
+  const employees = state.data?.employees?.length
+    ? state.data.employees
+    : [{ name:"Leonardo", color:"#ffcc05" }, { name:"Michele", color:"#32d1ff" }, { name:"Giulia", color:"#ff6aa2" }];
+  container.innerHTML = employees.map((employee) => `
+    <label class="group-picker-item">
+      <input type="checkbox" name="${escapeHtml(inputName)}" value="${escapeHtml(employee.name)}" ${selected.has(trainerKey(employee.name)) ? "checked" : ""}>
+      <span class="group-picker-dot" style="background:${escapeHtml(employee.color || trainerColor(employee.name))}"></span>
+      <span>${escapeHtml(employee.name)}</span>
+    </label>
+  `).join("") || `<div class="empty group-picker-empty">Nessun personal trainer creato.</div>`;
 }
 
 function recoveryBodyAreaName(areaNames) {
@@ -327,16 +345,36 @@ function setScheduleGroupsDropdown(open) {
   $("#schedule-groups-toggle").setAttribute("aria-expanded", String(state.scheduleGroupsOpen));
 }
 
+function selectedSchedulePeopleTrainerNames() {
+  return checkedTextValues("#schedule-people-trainers-picker input[type=checkbox]:checked");
+}
+
+function setScheduleSelectedPeopleTrainers(names = []) {
+  renderTrainerCheckboxes($("#schedule-people-trainers-picker"), names, "schedulePeopleTrainerFilters");
+  updateSchedulePeopleTrainersToggle();
+}
+
+function updateSchedulePeopleTrainersToggle() {
+  const names = selectedSchedulePeopleTrainerNames();
+  const text = names.length === 0 ? "Seleziona PT"
+    : names.length === 1 ? names[0]
+      : `${names.length} PT selezionati`;
+  $("#schedule-people-trainers-toggle").textContent = text;
+  $("#schedule-people-trainers-toggle").classList.toggle("has-selection", names.length > 0);
+}
+
+function setSchedulePeopleTrainersDropdown(open) {
+  state.schedulePeopleTrainersOpen = Boolean(open);
+  $("#schedule-people-trainers-dropdown").classList.toggle("hidden", !state.schedulePeopleTrainersOpen);
+  $("#schedule-people-trainers-toggle").setAttribute("aria-expanded", String(state.schedulePeopleTrainersOpen));
+}
+
 function matchesScheduleTrainer(item) {
   return !state.scheduleTrainerFilter || trainerKey(item.trainer) === trainerKey(state.scheduleTrainerFilter);
 }
 
 function trainerKey(name = "") {
   return String(name || "").trim().toLowerCase();
-}
-
-function selectedScheduleTrainerName() {
-  return state.scheduleTrainerFilter || $("#schedule-form")?.elements?.trainer?.value || "";
 }
 
 function personTrainerNames(personId) {
@@ -352,10 +390,11 @@ function personTrainerNames(personId) {
   return names;
 }
 
-function matchesPersonTrainer(person, trainerName, selectedPersonIds = new Set()) {
-  if (!trainerName || selectedPersonIds.has(person.id)) return true;
-  const selectedKey = trainerKey(trainerName);
-  return [...personTrainerNames(person.id)].some((name) => trainerKey(name) === selectedKey);
+function matchesPersonTrainers(person, trainerNames = [], selectedPersonIds = new Set()) {
+  if (!trainerNames.length || selectedPersonIds.has(person.id)) return true;
+  const selectedKeys = trainerNames.map(trainerKey).filter(Boolean);
+  const personKeys = [...personTrainerNames(person.id)].map(trainerKey);
+  return selectedKeys.some((key) => personKeys.includes(key));
 }
 
 function setScheduleSelectedPeople(ids = []) {
@@ -386,21 +425,19 @@ function setSchedulePeopleDropdown(open) {
 function renderSchedulePeoplePicker() {
   const current = new Set(selectedSchedulePeople());
   const groupIds = selectedScheduleGroupIds();
-  const trainerName = selectedScheduleTrainerName();
+  const trainerNames = selectedSchedulePeopleTrainerNames();
   const search = state.schedulePeopleSearch.trim().toLowerCase();
   const people = (state.data.people || []).filter((person) => {
     const matchesSearch = !search || [person.name, person.phone, person.notes, personGroupText(person)]
       .some((value) => String(value || "").toLowerCase().includes(search));
     const matchesGroup = !groupIds.length || hasAnyPersonGroup(person, groupIds) || current.has(person.id);
-    return matchesSearch && matchesGroup && matchesPersonTrainer(person, trainerName, current);
+    return matchesSearch && matchesGroup && matchesPersonTrainers(person, trainerNames, current);
   });
   $("#schedule-people-picker").innerHTML = people.map((person) => {
-    const trainers = [...personTrainerNames(person.id)].sort((left, right) => left.localeCompare(right, "it"));
-    const details = [personGroupText(person), trainers.length ? `PT: ${trainers.join(", ")}` : ""].filter(Boolean).join(" - ");
     return `<label class="people-picker-item">
       <input type="checkbox" value="${person.id}" ${current.has(person.id) ? "checked" : ""}>
       <span class="avatar mini-avatar" style="background:${escapeHtml(person.color)}">${escapeHtml(person.name[0] || "?")}</span>
-      <span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(details)}</small></span>
+      <span><b>${escapeHtml(person.name)}</b><small>${escapeHtml(personGroupText(person))}</small></span>
     </label>`;
   }).join("") || `<div class="empty people-picker-empty">Nessuna persona trovata.</div>`;
   updateSchedulePeopleToggle();
@@ -411,7 +448,9 @@ function resetScheduleForm() {
   form.reset();
   form.elements.id.value = "";
   setScheduleSelectedGroups([]);
+  setScheduleSelectedPeopleTrainers([]);
   setScheduleGroupsDropdown(false);
+  setSchedulePeopleTrainersDropdown(false);
   form.elements.date.value = state.scheduleDate;
   state.schedulePeopleSearch = "";
   setSchedulePeopleDropdown(false);
@@ -452,7 +491,9 @@ function renderSchedule() {
   $("#schedule-trainer-filter").innerHTML = employeeOptionHtml().replace('<option value="">Seleziona</option>', '<option value="">Tutti</option>');
   $("#schedule-trainer-filter").value = currentTrainerFilter;
   setScheduleSelectedGroups(selectedScheduleGroupIds());
+  setScheduleSelectedPeopleTrainers(selectedSchedulePeopleTrainerNames());
   updateScheduleGroupsToggle();
+  updateSchedulePeopleTrainersToggle();
   renderSchedulePeoplePicker();
   const filteredSchedule = schedule.filter(matchesScheduleTrainer);
   const selected = filteredSchedule.filter((item) => item.scheduled_date === state.scheduleDate);
@@ -1454,9 +1495,6 @@ $("#schedule-trainer-filter").addEventListener("change", (event) => {
   state.scheduleTrainerFilter = event.target.value;
   renderSchedule();
 });
-$("#schedule-form").addEventListener("change", (event) => {
-  if (event.target.matches("select[name=trainer]")) renderSchedulePeoplePicker();
-});
 $("#schedule-people-search").addEventListener("input", (event) => {
   state.schedulePeopleSearch = event.target.value;
   renderSchedulePeoplePicker();
@@ -1467,6 +1505,9 @@ $("#schedule-people-toggle").addEventListener("click", () => {
 $("#schedule-groups-toggle").addEventListener("click", () => {
   setScheduleGroupsDropdown(!state.scheduleGroupsOpen);
 });
+$("#schedule-people-trainers-toggle").addEventListener("click", () => {
+  setSchedulePeopleTrainersDropdown(!state.schedulePeopleTrainersOpen);
+});
 $("#schedule-people-picker").addEventListener("change", (event) => {
   if (event.target.matches("input[type=checkbox]")) updateSchedulePeopleToggle();
 });
@@ -1474,6 +1515,12 @@ $("#schedule-groups-picker").addEventListener("change", (event) => {
   if (!event.target.matches("input[type=checkbox]")) return;
   if (selectedScheduleGroupIds().length) setSchedulePeopleDropdown(true);
   updateScheduleGroupsToggle();
+  renderSchedulePeoplePicker();
+});
+$("#schedule-people-trainers-picker").addEventListener("change", (event) => {
+  if (!event.target.matches("input[type=checkbox]")) return;
+  if (selectedSchedulePeopleTrainerNames().length) setSchedulePeopleDropdown(true);
+  updateSchedulePeopleTrainersToggle();
   renderSchedulePeoplePicker();
 });
 $("#workout-people-search").addEventListener("input", (event) => {

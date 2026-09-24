@@ -199,6 +199,12 @@ function normalizeSchedule(body) {
   };
 }
 
+function addWeeks(date, weeks) {
+  const value = new Date(`${date}T12:00:00Z`);
+  value.setUTCDate(value.getUTCDate() + (weeks * 7));
+  return value.toISOString().slice(0, 10);
+}
+
 function normalizeEmployee(body) {
   return {
     name:cleanText(body.name, 100),
@@ -818,6 +824,26 @@ async function api(req, res, url) {
       return json(res, 400, { error:"Completa persona, data, orario e personal trainer." });
     }
     return json(res, 201, { id:await store.addSchedule(body) });
+  }
+  if (req.method === "POST" && url.pathname === "/api/schedule/series") {
+    const raw = await readBody(req);
+    const base = normalizeSchedule(raw);
+    const personIds = positiveIntegerList(raw.personIds);
+    const repeatCount = positiveInteger(raw.repeatCount) || 1;
+    if (!personIds.length || !base.date || !base.time || !base.trainer) {
+      return json(res, 400, { error:"Completa persone, data, orario e personal trainer." });
+    }
+    if (repeatCount > 52) {
+      return json(res, 400, { error:"Puoi programmare al massimo 52 settimane per volta." });
+    }
+    const items = [];
+    for (let week = 0; week < repeatCount; week += 1) {
+      for (const personId of personIds) {
+        items.push({ ...base, personId, date:addWeeks(base.date, week) });
+      }
+    }
+    const ids = await store.addSchedules(items);
+    return json(res, 201, { ok:true, count:ids.length, ids });
   }
   const scheduleMatch = url.pathname.match(/^\/api\/schedule\/(\d+)$/);
   const scheduleReminderMatch = url.pathname.match(/^\/api\/schedule\/(\d+)\/reminder-link$/);

@@ -300,6 +300,24 @@ function createSqliteStore() {
         VALUES (?, ?, ?, ?, ?, ?)
       `).run(body.personId, body.date, body.time, body.trainer, body.notes, body.status).lastInsertRowid);
     },
+    async addSchedules(items) {
+      const insert = db.prepare(`
+        INSERT INTO scheduled_sessions (person_id, scheduled_date, scheduled_time, trainer, notes, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      const ids = [];
+      db.exec("BEGIN");
+      try {
+        for (const body of items) {
+          ids.push(Number(insert.run(body.personId, body.date, body.time, body.trainer, body.notes, body.status).lastInsertRowid));
+        }
+        db.exec("COMMIT");
+        return ids;
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+    },
     async updateSchedule(id, body) {
       return db.prepare(`
         UPDATE scheduled_sessions
@@ -756,6 +774,19 @@ function createPostgresStore() {
         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id
       `, [body.personId, body.date, body.time, body.trainer, body.notes, body.status]);
       return Number(result.rows[0].id);
+    },
+    async addSchedules(items) {
+      const values = [];
+      const placeholders = items.map((body, index) => {
+        const offset = index * 6;
+        values.push(body.personId, body.date, body.time, body.trainer, body.notes, body.status);
+        return `($${offset + 1},$${offset + 2},$${offset + 3},$${offset + 4},$${offset + 5},$${offset + 6})`;
+      });
+      const result = await query(`
+        INSERT INTO scheduled_sessions (person_id,scheduled_date,scheduled_time,trainer,notes,status)
+        VALUES ${placeholders.join(",")} RETURNING id
+      `, values);
+      return result.rows.map((row) => Number(row.id));
     },
     async updateSchedule(id, body) {
       const result = await query(`

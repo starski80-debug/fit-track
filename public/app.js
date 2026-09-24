@@ -447,6 +447,9 @@ function resetScheduleForm() {
   const form = $("#schedule-form");
   form.reset();
   form.elements.id.value = "";
+  form.elements.repeatWeekly.disabled = false;
+  $(".schedule-repeat-toggle").classList.remove("hidden");
+  $(".schedule-repeat-count").classList.add("hidden");
   setScheduleSelectedGroups([]);
   setScheduleSelectedPeopleTrainers([]);
   setScheduleGroupsDropdown(false);
@@ -473,6 +476,10 @@ function openScheduleEdit(item) {
   form.elements.trainer.value = item.trainer || "";
   form.elements.time.value = item.scheduled_time || "";
   form.elements.date.value = item.scheduled_date || state.scheduleDate;
+  form.elements.repeatWeekly.checked = false;
+  form.elements.repeatWeekly.disabled = true;
+  $(".schedule-repeat-toggle").classList.add("hidden");
+  $(".schedule-repeat-count").classList.add("hidden");
   $("#schedule-submit").textContent = "Salva modifiche";
   $("#schedule-cancel-edit").classList.remove("hidden");
   form.scrollIntoView({ behavior:"smooth", block:"center" });
@@ -1526,6 +1533,9 @@ $("#workout-people-search").addEventListener("input", (event) => {
   renderWorkoutsView();
 });
 $("#schedule-cancel-edit").addEventListener("click", resetScheduleForm);
+$("#schedule-form [name=repeatWeekly]").addEventListener("change", (event) => {
+  $(".schedule-repeat-count").classList.toggle("hidden", !event.target.checked);
+});
 $("#group-cancel-edit").addEventListener("click", resetGroupForm);
 $("#employee-cancel-edit").addEventListener("click", resetEmployeeForm);
 $("#template-cancel-edit").addEventListener("click", resetTemplateForm);
@@ -1562,14 +1572,21 @@ $("#schedule-form").addEventListener("submit", async (event) => {
         body:JSON.stringify({ ...payload, personId:recipients[0].id })
       });
     } else {
-      await Promise.all(recipients.map((person) => request("/api/schedule", {
+      const repeatCount = form.get("repeatWeekly") === "on" ? Number(form.get("repeatCount")) : 1;
+      await request("/api/schedule/series", {
         method:"POST",
-        body:JSON.stringify({ ...payload, personId:person.id })
-      })));
+        body:JSON.stringify({ ...payload, personIds:recipients.map((person) => person.id), repeatCount })
+      });
     }
     resetScheduleForm();
     await load();
-    toast(id ? "Appuntamento aggiornato." : recipients.length > 1 ? `Appuntamenti creati per ${recipients.length} persone.` : "Appuntamento aggiunto in agenda.");
+    if (id) {
+      toast("Appuntamento aggiornato.");
+    } else {
+      const repeatCount = form.get("repeatWeekly") === "on" ? Number(form.get("repeatCount")) : 1;
+      const total = recipients.length * repeatCount;
+      toast(total > 1 ? `${total} appuntamenti creati.` : "Appuntamento aggiunto in agenda.");
+    }
   } catch (error) {
     toast(error.message);
   } finally {

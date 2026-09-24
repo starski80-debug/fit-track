@@ -122,14 +122,17 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(html, /schedule-form/);
   assert.match(html, /schedule-people-picker/);
   assert.match(html, /schedule-people-search/);
+  assert.match(html, /repeatWeekly/);
+  assert.match(html, /Numero appuntamenti/);
   assert.match(html, /assignGroup/);
   assert.match(html, /schedule-group/);
   assert.match(html, /Leonardo/);
   assert.match(app, /function renderSchedule/);
-  assert.match(app, /Appuntamenti creati per/);
+  assert.match(app, /appuntamenti creati/);
   assert.match(app, /function selectedSchedulePeople/);
   assert.match(app, /function renderSchedulePeoplePicker/);
   assert.match(app, /Seleziona una o piu persone dalla lista/);
+  assert.match(app, /\/api\/schedule\/series/);
   assert.match(app, /function renderCalendarGrid/);
   assert.match(app, /function openDayDialog/);
   assert.match(app, /data-calendar-day/);
@@ -153,6 +156,8 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(server, /function appointmentHtml/);
   assert.match(server, /function scheduleStatusLabel/);
   assert.match(server, /POST" && url\.pathname === "\/api\/schedule"/);
+  assert.match(server, /POST" && url\.pathname === "\/api\/schedule\/series"/);
+  assert.match(server, /repeatCount > 52/);
   assert.match(server, /reminder-link/);
   assert.match(server, /\/api\/appointment\//);
   assert.match(server, /serveAppointmentPage/);
@@ -160,6 +165,7 @@ test("la home include agenda calendario per gli appuntamenti", () => {
   assert.match(database, /CREATE TABLE IF NOT EXISTS scheduled_sessions/);
   assert.match(database, /response_token TEXT NOT NULL DEFAULT ''/);
   assert.match(database, /async addSchedule/);
+  assert.match(database, /async addSchedules/);
   assert.match(database, /async updateSchedule/);
   assert.match(database, /async prepareScheduleResponseLink/);
   assert.match(database, /async setScheduleStatusByToken/);
@@ -389,6 +395,33 @@ test("il backend protegge le API e risponde al controllo reale", { timeout:20_00
   assert.ok(Array.isArray(body.catalog));
   assert.ok(Array.isArray(body.schedule));
 
+  const personResponse = await fetch(`${base}/api/people`, {
+    method:"POST",
+    headers:{ Cookie:cookie, "Content-Type":"application/json" },
+    body:JSON.stringify({ name:"Test serie appuntamenti" })
+  });
+  assert.equal(personResponse.status, 201);
+  const personId = (await personResponse.json()).id;
+  const seriesResponse = await fetch(`${base}/api/schedule/series`, {
+    method:"POST",
+    headers:{ Cookie:cookie, "Content-Type":"application/json" },
+    body:JSON.stringify({
+      personIds:[personId], date:"2026-10-06", time:"18:00", trainer:"Leonardo", repeatCount:3
+    })
+  });
+  assert.equal(seriesResponse.status, 201);
+  assert.equal((await seriesResponse.json()).count, 3);
+  const seriesDashboard = await fetch(`${base}/api/dashboard`, { headers:{ Cookie:cookie } });
+  const seriesData = await seriesDashboard.json();
+  assert.deepEqual(
+    seriesData.schedule.filter((item) => item.person_id === personId).map((item) => item.scheduled_date),
+    ["2026-10-06", "2026-10-13", "2026-10-20"]
+  );
+  const removeTestPerson = await fetch(`${base}/api/people/${personId}`, {
+    method:"DELETE", headers:{ Cookie:cookie }
+  });
+  assert.equal(removeTestPerson.status, 200);
+
   const missing = await fetch(`${base}/api/workouts/999999999`, {
     method:"DELETE", headers:{ Cookie:cookie }
   });
@@ -416,7 +449,7 @@ test("la configurazione di stabilita include retry, timeout e shutdown", () => {
   assert.match(database, /journal_mode = WAL/);
   assert.match(database, /ON CONFLICT \(body_area, name\) DO NOTHING/);
   assert.match(server, /function positiveInteger/);
-  assert.match(worker, /fittrack-shell-v44/);
+  assert.match(worker, /fittrack-shell-v46/);
   assert.match(worker, /url\.pathname\.startsWith\("\/appointment\/"\)/);
   assert.match(worker, /url\.pathname\.startsWith\("\/template\/"\)/);
   assert.match(worker, /brand\/formae-banner\.png/);

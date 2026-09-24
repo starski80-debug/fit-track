@@ -12,7 +12,7 @@
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" href="/icons/icon-192.png" sizes="192x192">
   <link rel="apple-touch-icon" href="/icons/icon-192.png">
-  <link rel="stylesheet" href="/style.css?v=63">
+  <link rel="stylesheet" href="/style.css?v=65">
 </head>
 <body>
   <aside class="sidebar">
@@ -39,7 +39,7 @@
         <p class="eyebrow" id="today"></p>
         <div class="page-title-row">
           <h1 id="page-title">Bentornato</h1>
-          <span class="build-version">Mobile 12</span>
+          <span class="build-version">Mobile 14</span>
         </div>
       </div>
       <div class="header-actions">
@@ -117,6 +117,19 @@
           </label>
           <label>Data
             <input name="date" id="schedule-form-date" type="date" required>
+          </label>
+          <label class="schedule-repeat-toggle">
+            <input name="repeatWeekly" type="checkbox">
+            <span>Ripeti ogni settimana</span>
+          </label>
+          <label class="schedule-repeat-count hidden">Numero appuntamenti
+            <select name="repeatCount">
+              <option value="4">4 settimane</option>
+              <option value="8">8 settimane</option>
+              <option value="12">12 settimane</option>
+              <option value="24">24 settimane</option>
+              <option value="52">52 settimane</option>
+            </select>
           </label>
           <div class="schedule-actions">
             <button class="secondary hidden" id="schedule-cancel-edit" type="button">Annulla</button>
@@ -468,7 +481,7 @@
     </section>
   </template>
   <div id="toast" role="status"></div>
-  <script src="/app.js?v=63"></script>
+  <script src="/app.js?v=65"></script>
 </body>
 </html>
 
